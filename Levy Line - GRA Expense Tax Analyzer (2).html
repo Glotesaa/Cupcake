@@ -1,0 +1,1691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Levy Line — GRA Expense Tax Analyzer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --navy-950:#0a1730;
+    --navy-900:#0f2044;
+    --navy-800:#152b5c;
+    --navy-700:#1c3672;
+    --accent:#8b2fb0;
+    --accent-2:#c23fb8;
+    --accent-soft:#f3e6f9;
+    --ink:#111827;
+    --sub:#5b6478;
+    --line:#e4e7ef;
+    --bg:#eef0f6;
+    --panel:#ffffff;
+    --good:#1a7f4e;
+    --good-bg:#e6f6ee;
+    --warn:#9a6300;
+    --warn-bg:#fff3d9;
+    --bad:#b0243a;
+    --bad-bg:#fce9ec;
+    --cond:#3a5cc4;
+    --cond-bg:#eaeefb;
+    --mono: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+    --sans: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;}
+  body{min-height:100vh;}
+
+  /* ---------- Top App Bar ---------- */
+  .appbar{background:linear-gradient(180deg,var(--navy-950),var(--navy-900));color:#fff;
+    padding:10px 20px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--navy-700);}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.2px;}
+  .brand .mark{width:26px;height:26px;border-radius:7px;
+    background:linear-gradient(135deg,var(--accent-2),var(--accent));
+    display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;}
+  .brand .name{font-size:15px;}
+  .brand .name small{display:block;font-weight:400;font-size:10.5px;color:#b9c3e0;letter-spacing:.4px;text-transform:uppercase;}
+  .appbar .spacer{flex:1;}
+  .appbar .tag{font-size:11px;color:#c9d2ee;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
+    padding:4px 10px;border-radius:100px;}
+
+  .subbar{background:var(--navy-800);color:#e7ebfa;padding:9px 20px;font-size:12.5px;display:flex;gap:22px;
+    border-bottom:2px solid var(--accent);}
+  .subbar .tab{padding-bottom:6px;color:#aab6de;cursor:default;}
+  .subbar .tab.on{color:#fff;font-weight:600;border-bottom:2px solid var(--accent-2);margin-bottom:-11px;padding-bottom:8px;}
+
+  .wrap{max-width:1360px;margin:0 auto;padding:18px 20px 60px;}
+
+  /* ---------- KPI cards ---------- */
+  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px;}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 15px;position:relative;overflow:hidden;}
+  .kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent);}
+  .kpi .lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--sub);font-weight:700;}
+  .kpi .val{font-size:22px;font-weight:800;margin-top:4px;color:var(--navy-950);font-variant-numeric:tabular-nums;}
+  .kpi .sub{font-size:11px;color:var(--sub);margin-top:2px;}
+  .kpi.bad::before{background:var(--bad);}
+  .kpi.warn::before{background:var(--warn);}
+  .kpi.good::before{background:var(--good);}
+
+  /* ---------- Panels row ---------- */
+  .panels{display:grid;grid-template-columns:1.1fr 1.5fr;gap:12px;margin-bottom:16px;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;}
+  .panel h3{margin:0 0 3px;font-size:13px;color:var(--navy-950);}
+  .panel .cap{font-size:11px;color:var(--sub);margin-bottom:10px;}
+
+  /* donut */
+  .donut-wrap{display:flex;align-items:center;gap:16px;}
+  .legend{display:flex;flex-direction:column;gap:6px;font-size:11.5px;}
+  .legend .row{display:flex;align-items:center;gap:7px;}
+  .legend .sw{width:9px;height:9px;border-radius:2px;flex:none;}
+  .legend .amt{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--sub);padding-left:10px;}
+
+  /* bars */
+  .bars{display:flex;flex-direction:column;gap:9px;}
+  .bar-row{display:grid;grid-template-columns:150px 1fr 78px;align-items:center;gap:10px;font-size:11.5px;}
+  .bar-row .name{color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .bar-track{background:#eef0f7;border-radius:5px;height:9px;overflow:hidden;}
+  .bar-fill{height:100%;border-radius:5px;background:linear-gradient(90deg,var(--accent),var(--accent-2));}
+  .bar-row .amt{text-align:right;font-variant-numeric:tabular-nums;color:var(--sub);}
+
+  /* ---------- Add form ---------- */
+  .addbar{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;
+    display:flex;gap:10px;align-items:flex-end;margin-bottom:14px;flex-wrap:wrap;}
+  .addbar .field{display:flex;flex-direction:column;gap:4px;}
+  .addbar label{font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--sub);font-weight:700;}
+  .addbar input,.addbar select{border:1px solid var(--line);border-radius:7px;padding:8px 10px;font-size:13px;
+    font-family:var(--sans);background:#fbfbfd;min-width:0;}
+  .addbar input:focus,.addbar select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent);}
+  #f-label{width:260px;}
+  #f-amt{width:130px;}
+  #f-vat{width:150px;}
+  .btn{border:none;border-radius:7px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans);}
+  .btn-primary{background:linear-gradient(135deg,var(--accent-2),var(--accent));color:#fff;}
+  .btn-primary:hover{filter:brightness(1.06);}
+  .btn-ghost{background:#fff;border:1px solid var(--line);color:var(--navy-950);}
+  .btn-ghost:hover{background:#f6f7fb;}
+  .addbar .grow{flex:1;}
+  .hint{font-size:11px;color:var(--sub);width:100%;margin-top:2px;}
+
+  .filterbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:10px;padding:9px 12px;
+    background:#fff;border:1px solid var(--line);border-radius:9px;}
+  .filterbar .flabel{font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.4px;}
+  .filterbar input[type="text"]{flex:1;min-width:180px;border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:12.5px;font-family:var(--sans);}
+  .filterbar select{border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:12.5px;font-family:var(--sans);background:#fbfbfd;}
+  .filterbar .fcount{margin-left:auto;font-size:11.5px;color:var(--sub);}
+  tr.hidden-row{display:none;}
+
+  /* ---------- Ask module ---------- */
+  .askcard{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-top:16px;}
+  .askcard h3{margin:0 0 3px;font-size:13.5px;}
+  .askcard .cap{font-size:11px;color:var(--sub);margin-bottom:12px;}
+  .askrow{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;}
+  .askrow .field{display:flex;flex-direction:column;gap:4px;}
+  .askrow label{font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--sub);font-weight:700;}
+  .askrow select{border:1px solid var(--line);border-radius:7px;padding:8px 10px;font-size:12.5px;font-family:var(--sans);background:#fbfbfd;min-width:210px;}
+  #ask-q{flex:1;min-width:260px;border:1px solid var(--line);border-radius:7px;padding:9px 12px;font-size:13px;font-family:var(--sans);}
+  #ask-q:focus,.askrow select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent);}
+  .chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;}
+  .chip{font-size:11px;background:var(--accent-soft);color:var(--accent);border:1px solid #e7cff2;border-radius:100px;
+    padding:5px 11px;cursor:pointer;}
+  .chip:hover{background:#ecd6f5;}
+  .answer{margin-top:14px;border:1px solid var(--line);border-radius:9px;padding:14px 16px;background:#fbfbfe;
+    display:none;}
+  .answer.show{display:block;}
+  .answer .src{display:inline-block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;
+    padding:3px 8px;border-radius:100px;margin-bottom:9px;}
+  .src-live{background:var(--good-bg);color:var(--good);}
+  .src-offline{background:var(--cond-bg);color:var(--cond);}
+  .answer p{margin:0 0 8px;font-size:13px;line-height:1.6;color:#232838;white-space:pre-wrap;}
+  .answer p:last-child{margin-bottom:0;}
+  .loading-dots::after{content:'…';animation:dots 1.2s steps(4,end) infinite;}
+  @keyframes dots{0%,20%{content:'.';}40%{content:'..';}60%,100%{content:'...';}}
+
+  /* ---------- Table ---------- */
+  .tablecard{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;}
+  .tablecard-head{display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);}
+  .tablecard-head h3{margin:0;font-size:13.5px;}
+  .tablecard-head .n{margin-left:8px;font-size:11px;color:var(--sub);}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  thead th{position:sticky;top:0;background:var(--navy-950);color:#e9edfb;text-align:left;
+    padding:9px 12px;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;font-weight:700;white-space:nowrap;}
+  thead th.num{text-align:right;}
+  tbody td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  tbody td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  tbody tr{cursor:pointer;}
+  tbody tr:hover{background:#f7f5fb;}
+  tbody tr.open{background:var(--accent-soft);}
+  .total-row td{background:var(--navy-950);color:#fff;font-weight:800;position:sticky;bottom:0;}
+  .total-row td.num{font-variant-numeric:tabular-nums;}
+
+  .badge{display:inline-block;padding:3px 9px;border-radius:100px;font-size:10.5px;font-weight:700;white-space:nowrap;}
+  .b-full{background:var(--good-bg);color:var(--good);}
+  .b-cond{background:var(--cond-bg);color:var(--cond);}
+  .b-partial{background:var(--warn-bg);color:var(--warn);}
+  .b-disallowed{background:var(--bad-bg);color:var(--bad);}
+  .taxtag{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:5px;background:#eef1fb;color:var(--navy-800);margin-right:4px;}
+
+  .rm{background:none;border:none;color:var(--sub);cursor:pointer;font-size:15px;padding:2px 6px;border-radius:5px;}
+  .rm:hover{background:var(--bad-bg);color:var(--bad);}
+
+  /* ---------- Detail drawer (inline expand row) ---------- */
+  .detail-row td{background:#fbfaff;padding:0;border-bottom:1px solid var(--line);}
+  .detail{padding:16px 20px 20px 20px;display:grid;grid-template-columns:1fr 1fr;gap:16px 26px;}
+  .detail .block{}
+  .detail .block h4{margin:0 0 5px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--accent);font-weight:800;}
+  .detail .block p{margin:0;font-size:12.5px;line-height:1.55;color:#333a4d;}
+  .detail .block.full{grid-column:1/-1;}
+  .cite{display:inline-block;background:var(--navy-950);color:#fff;font-family:var(--mono);font-size:10.5px;
+    padding:2px 7px;border-radius:5px;margin-bottom:6px;}
+
+  /* ---------- Sector Audit Reference module ---------- */
+  .sector-toolbar{display:flex;align-items:flex-end;gap:16px;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:12px 14px;margin-bottom:14px;flex-wrap:wrap;}
+  .sector-toolbar .field{display:flex;flex-direction:column;gap:4px;}
+  .sector-toolbar label{font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--sub);font-weight:700;}
+  #sector-select{border:1px solid var(--line);border-radius:7px;padding:9px 12px;font-size:13px;font-family:var(--sans);
+    background:#fbfbfd;min-width:320px;}
+  #sector-select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent);}
+
+  .sector-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px;}
+
+  .sector-content{padding:22px 26px;}
+  .sec-title{margin:0 0 3px;font-size:17px;color:var(--navy-950);letter-spacing:.2px;}
+  .sec-sub{margin:0 0 16px;font-size:12.5px;color:var(--sub);}
+  .sec-heading{font-size:12px;text-transform:uppercase;letter-spacing:.4px;font-weight:800;color:var(--accent);
+    margin:20px 0 8px;padding-top:14px;border-top:1px solid var(--line);}
+  .sec-heading:first-of-type{border-top:none;padding-top:0;margin-top:6px;}
+  .sec-para{font-size:13px;line-height:1.65;color:#2b3143;margin:0 0 10px;background:#faf8fc;border:1px solid #eee0f5;
+    border-radius:8px;padding:12px 14px;}
+  .sec-bullets{margin:0 0 10px;padding-left:20px;font-size:12.5px;line-height:1.7;color:#333a4d;}
+  .sec-bullets li{margin-bottom:2px;}
+  .sec-table{width:100%;border-collapse:collapse;margin:0 0 14px;font-size:12.5px;}
+  .sec-table th{background:var(--navy-950);color:#e9edfb;text-align:left;padding:8px 10px;font-size:10px;
+    text-transform:uppercase;letter-spacing:.3px;}
+  .sec-table td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.5;}
+  .sec-table tr:nth-child(even) td{background:#faf9fc;}
+  .sec-table td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .sec-spec{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;margin:0 0 14px;font-size:12.5px;}
+  .sec-spec .k{color:#333a4d;}
+  .sec-spec .v{color:var(--sub);text-align:right;}
+  .sec-spec-row{display:contents;}
+
+  /* ---------- Diagnostic ---------- */
+  .diag-grid{display:grid;grid-template-columns:1fr 1.3fr;gap:14px;align-items:start;}
+  .diag-form .grp{font-size:11px;text-transform:uppercase;letter-spacing:.4px;font-weight:800;color:var(--accent);
+    margin:16px 0 8px;}
+  .diag-form .grp:first-child{margin-top:4px;}
+  .diag-row{display:grid;grid-template-columns:1fr 120px;gap:8px;align-items:center;margin-bottom:7px;}
+  .diag-row label{font-size:12px;color:#333a4d;line-height:1.35;}
+  .diag-row input,.diag-row select{border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12.5px;
+    font-family:var(--sans);text-align:right;}
+  .diag-row select{text-align:left;}
+  .dtest{border:1px solid var(--line);border-radius:8px;padding:11px 13px;margin-bottom:9px;}
+  .dtest .head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;}
+  .dtest .name{font-size:12.5px;font-weight:700;color:var(--navy-950);}
+  .dtest .val{font-size:12.5px;font-variant-numeric:tabular-nums;color:var(--sub);white-space:nowrap;}
+  .dtest .note{font-size:11.5px;color:var(--sub);margin-top:5px;line-height:1.5;}
+  .dtest .ref{font-size:10.5px;color:#8b8f9e;margin-top:4px;}
+
+  footer{max-width:1360px;margin:10px auto 40px;padding:0 20px;font-size:11px;color:var(--sub);line-height:1.6;}
+
+  @media (max-width:980px){
+    .kpis{grid-template-columns:repeat(2,1fr);}
+    .panels{grid-template-columns:1fr;}
+    .detail{grid-template-columns:1fr;}
+    thead{display:none;}
+  }
+</style>
+</head>
+<body>
+
+  <div class="appbar">
+    <div class="brand">
+      <div class="mark">LL</div>
+      <div class="name">Levy Line<small>GRA Expense Tax Classification Engine</small></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="tag" id="datasetTag">Sample: Chocoluv Ltd — SG&amp;A FY2025</div>
+  </div>
+  <div class="subbar">
+    <div class="tab on" id="tabExpense" data-view="expense">Expense Tax Analysis</div>
+    <div class="tab" id="tabSector" data-view="sector">Sector Audit Reference</div>
+    <div class="tab" style="cursor:default;margin-left:auto;">Ghana · Income Tax Act 896 · Revenue Admin Act 915 · VAT Act 1151 (2026)</div>
+  </div>
+
+  <div class="wrap" id="view-expense">
+
+    <div class="kpis">
+      <div class="kpi"><div class="lbl">Total expense lines</div><div class="val" id="kpiCount">0</div><div class="sub">loaded in this workspace</div></div>
+      <div class="kpi"><div class="lbl">Total expense value</div><div class="val" id="kpiTotal">GH¢0</div><div class="sub">sum of amounts entered</div></div>
+      <div class="kpi"><div class="lbl">WHT remittable</div><div class="val" id="kpiWht">GH¢0</div><div class="sub">expected withholding to GRA</div></div>
+      <div class="kpi warn"><div class="lbl">Conditional / at risk</div><div class="val" id="kpiCond">GH¢0</div><div class="sub">needs documentation to hold</div></div>
+      <div class="kpi bad"><div class="lbl">Disallowed exposure</div><div class="val" id="kpiBad">GH¢0</div><div class="sub">add-back → +25% CIT if sustained</div></div>
+    </div>
+
+    <div class="panels">
+      <div class="panel">
+        <h3>Deductibility mix</h3>
+        <div class="cap">Share of total expense value by tax position</div>
+        <div class="donut-wrap">
+          <svg id="donut" width="128" height="128" viewBox="0 0 128 128"></svg>
+          <div class="legend" id="donutLegend"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>WHT remittable by category</h3>
+        <div class="cap">Top expense categories by expected withholding tax</div>
+        <div class="bars" id="whtBars"></div>
+      </div>
+    </div>
+
+    <div class="addbar">
+      <div class="field">
+        <label for="f-label">Expense line</label>
+        <input id="f-label" type="text" placeholder="e.g. Royalties, Rent – Warehouse, Consultancy fee…" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="f-amt">Amount (GH¢)</label>
+        <input id="f-amt" type="number" inputmode="decimal" placeholder="0.00">
+      </div>
+      <div class="field">
+        <label for="f-vat">Payee</label>
+        <select id="f-vat">
+          <option value="resident">Resident</option>
+          <option value="nonresident">Non-resident</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" id="addBtn">+ Classify &amp; add line</button>
+      <div class="grow"></div>
+      <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display:none;">
+      <button class="btn btn-ghost" id="uploadBtn">⇧ Upload CSV/Excel</button>
+      <button class="btn btn-ghost" id="downloadBtn">⇩ Download results</button>
+      <button class="btn btn-ghost" id="sampleBtn">Load sample set</button>
+      <button class="btn btn-ghost" id="clearBtn">Clear all</button>
+      <div class="hint">Type any expense description — the engine matches it against Ghana tax rules and fills every column automatically. Click a row to see the full opinion, GRA view and audit notes. Upload a CSV/Excel file with columns <em>Expense line, Amount</em> (and optionally <em>Payee</em>) for bulk classification.</div>
+    </div>
+
+    <div class="filterbar" id="filterbar">
+      <span class="flabel">Filter register:</span>
+      <input type="text" id="filt-text" placeholder="Search expense line or governing position…">
+      <select id="filt-tax">
+        <option value="">All tax types</option>
+        <option value="WHT">WHT</option>
+        <option value="VAT">VAT</option>
+        <option value="PAYE">PAYE</option>
+        <option value="None">None</option>
+        <option value="Review">Review</option>
+      </select>
+      <select id="filt-status">
+        <option value="">All deductible statuses</option>
+        <option value="full">Fully deductible</option>
+        <option value="cond">Conditional</option>
+        <option value="partial">Partially deductible</option>
+        <option value="disallowed">Disallowed</option>
+      </select>
+      <button class="btn btn-ghost" id="filt-clear" style="padding:7px 12px;font-size:12px;">Clear filters</button>
+      <span class="fcount" id="filtCount"></span>
+    </div>
+
+    <div class="tablecard">
+      <div class="tablecard-head"><h3>Expense line tax register</h3><span class="n" id="rowCount"></span></div>
+      <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:26px;"></th>
+            <th>Expense line</th>
+            <th class="num">Amount</th>
+            <th>Governing position</th>
+            <th>Tax type</th>
+            <th>Deductible status</th>
+            <th class="num">Remittable to GRA</th>
+            <th style="width:26px;"></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+        <tfoot>
+          <tr class="total-row">
+            <td></td>
+            <td>TOTAL</td>
+            <td class="num" id="totAmt">—</td>
+            <td colspan="2"></td>
+            <td></td>
+            <td class="num" id="totWht">—</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+      </div>
+    </div>
+
+    <div class="askcard">
+      <h3>Ask about an expense line</h3>
+      <div class="cap">Scoped to this tool's job — Ghana expense-line tax classification. Ask "why", "what rate", "how do I reduce this" or "what does GRA consider this" about any line.</div>
+      <div class="askrow">
+        <div class="field" style="flex:none;">
+          <label for="ask-scope">Line (optional)</label>
+          <select id="ask-scope"><option value="">Whole register / general question</option></select>
+        </div>
+        <div class="field" style="flex:1;">
+          <label for="ask-q">Your question</label>
+          <input id="ask-q" type="text" placeholder="e.g. Why is CSR only conditionally deductible?">
+        </div>
+        <button class="btn btn-primary" id="askBtn">Ask</button>
+      </div>
+      <div class="chips">
+        <span class="chip" data-q="Why is this line disallowed or only conditionally deductible?">Why is this disallowed?</span>
+        <span class="chip" data-q="What withholding tax rate applies and how much should be remitted to GRA?">What rate applies?</span>
+        <span class="chip" data-q="How can I reduce the tax liability or audit risk on this line?">How do I reduce risk?</span>
+        <span class="chip" data-q="What is GRA's view or definition of this expense line?">What is GRA's view?</span>
+      </div>
+      <div class="answer" id="answerBox">
+        <span class="src" id="answerSrc"></span>
+        <div id="answerBody"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="wrap" id="view-sector" style="display:none;">
+
+    <div class="sector-toolbar">
+      <div class="field">
+        <label for="sector-select">Industry</label>
+        <select id="sector-select">
+          <optgroup label="Applies to every sector">
+            <option value="Universal">Universal — Workforce Taxation &amp; Benefits</option>
+            <option value="Cross-Cutting Schemes">Cross-Cutting Schemes — Recurring Audit Patterns</option>
+          </optgroup>
+          <optgroup label="Sector-specific" id="sector-industry-group"></optgroup>
+        </select>
+      </div>
+      <div class="field" style="flex:1;">
+        <label>&nbsp;</label>
+        <div class="hint" style="margin:0;">Standard treatment, common accountant errors and the tax auditor's corrective view, sector by sector — reference only, not a filed position.</div>
+      </div>
+      <button class="btn btn-ghost" id="diagBtn">Open Pre-Audit Diagnostic →</button>
+    </div>
+
+    <div class="sector-kpis" id="sectorKpis"></div>
+
+    <div class="sector-content panel" id="sectorContent"></div>
+
+  </div>
+
+  <div class="wrap" id="view-diag" style="display:none;">
+    <div class="sector-toolbar">
+      <button class="btn btn-ghost" id="diagBack">← Back to Sector Audit Reference</button>
+      <div class="hint" style="margin:0 0 0 14px;">Pre-audit diagnostic — enter a company's own figures and run the ratio/consistency tests a tax auditor typically runs first. A "FLAG" means the figure needs a documented explanation before filing — not, on its own, proof of an error.</div>
+    </div>
+
+    <div class="diag-grid">
+      <div class="panel diag-form">
+        <h3>Company &amp; figures</h3>
+        <div class="cap">Pre-filled with the workbook's illustrative example — replace with your own numbers.</div>
+        <div id="diagForm"></div>
+        <button class="btn btn-primary" id="diagRun" style="margin-top:12px;width:100%;">Run diagnostic</button>
+      </div>
+      <div class="panel diag-results">
+        <h3>Results</h3>
+        <div class="cap" id="diagSummary">13 tests · run diagnostic to see flags</div>
+        <div id="diagResults"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Levy Line is a classification aid built on the general framework of Ghana's Income Tax Act, 2015 (Act 896, as amended), the Revenue
+    Administration Act, 2016 (Act 915), the Value Added Tax Act, 2025 (Act 1151, effective 1 January 2026), and the Growth and
+    Sustainability Levy Act as amended. The Sector Audit Reference tab is drawn from a working-draft sector audit workbook (prepared
+    August 2026) — cross-check figures against the primary legislation and current GRA practice before relying on it in an engagement.
+    Keyword-based classification and the pre-audit diagnostic are starting points, not filed positions. Your entries are stored only in
+    your own workspace.
+  </footer>
+
+<script>
+/* =========================================================================
+   RULE ENGINE — keyword → tax position. Ordered; first match wins.
+   Each rule: { id, kw:[...], label, law, taxType:[...], whtRate, resOnly?,
+   nrRate?, deductible: full|cond|partial|disallowed, notes, exceptions,
+   opinion, suggestion }
+   ========================================================================= */
+const RULES = [
+  { id:'royalty', kw:['royalt'], label:'Royalties', law:'Act 896 s.116; Transfer Pricing Regs (L.I. 2412)',
+    taxType:['WHT'], whtRate:0.075, nrRate:0.15, deductible:'cond',
+    notes:'Deductible if incurred wholly, exclusively and necessarily for the business and priced at arm\'s length.',
+    exceptions:'If paid to a related party (parent, shareholder-controlled licensor), transfer pricing documentation (Local File) is required — without it the deduction and the WHT position can both be challenged.',
+    opinion:'Highest-risk line on most income statements. An auditor will ask for the licence agreement, confirm related-party status, and test the royalty rate against comparables before accepting the deduction.',
+    suggestion:'Keep the licence agreement, comparability study and WHT certificates on file every year, not just at audit time. If related-party, get the TP Local File done proactively.' },
+
+  { id:'directorfee', kw:['director'], label:"Directors' remuneration/fees", law:'Act 896 s.116, 5th Sch.',
+    taxType:['WHT'], whtRate:0.20, nrRate:0.20, deductible:'cond',
+    notes:'Deductible business cost. WHT at 20% is FINAL for non-executive/board fees.',
+    exceptions:'If a director is full-time/executive staff, their pay should run through PAYE (5th Schedule), not this 20% WHT — mixing the two is a common error.',
+    opinion:'Auditors check whether the 20% WHT was actually applied and remitted, and whether any "director" on this line is really an employee being paid outside payroll.',
+    suggestion:'Split executive vs non-executive director pay into separate lines so the correct tax treatment (PAYE vs 20% WHT) is obvious and auditable.' },
+
+  { id:'auditfee', kw:['auditor','audit fee','audit remuneration'], label:"Auditors' remuneration", law:'Act 896 s.116',
+    taxType:['WHT','VAT'], whtRate:0.075, nrRate:0.20, deductible:'full',
+    notes:'Ordinary deductible professional fee.',
+    exceptions:'Below the GH¢2,000 per-contract threshold, WHT does not apply.',
+    opinion:'Low risk if the invoice and WHT certificate are on file — a standard audit-trail check only.',
+    suggestion:'No action needed beyond keeping the invoice, engagement letter and WHT certificate together.' },
+
+  { id:'legal', kw:['legal','lawyer','solicitor','attorney'], label:'Legal fees', law:'Act 896 s.116',
+    taxType:['WHT','VAT'], whtRate:0.075, nrRate:0.20, deductible:'cond',
+    notes:'Deductible if revenue in nature (day-to-day legal advice, contract review, debt recovery).',
+    exceptions:'Legal costs tied to acquiring an asset, defending title, or a capital transaction are capital in nature and must be capitalised, not expensed.',
+    opinion:'Auditors split the invoice narrative to separate capital-related legal work from routine advisory work.',
+    suggestion:'Ask counsel to itemise invoices by matter so capital vs revenue legal cost is clear from the paperwork.' },
+
+  { id:'consult', kw:['consult','professional charge','professional fee','professional service'], label:'Professional/consultancy fees', law:'Act 896 s.116',
+    taxType:['WHT','VAT'], whtRate:0.075, nrRate:0.20, deductible:'full',
+    notes:'Deductible if wholly, exclusively and necessarily incurred for the business.',
+    exceptions:'Non-resident consultants: 20% final WHT and possible VAT reverse-charge if the service is used in Ghana.',
+    opinion:'Watch for a sharp year-on-year jump with no matching increase in activity — auditors will ask what changed.',
+    suggestion:'Keep signed engagement letters and clear deliverables for every consultancy invoice above GH¢2,000.' },
+
+  { id:'mgttech', kw:['management fee','technical service','technical fee'], label:'Management/technical service fees', law:'Act 896 s.116',
+    taxType:['WHT'], whtRate:0.075, nrRate:0.20, deductible:'cond',
+    notes:'Deductible if genuine services were rendered and priced at arm\'s length.',
+    exceptions:'To a non-resident parent/affiliate: 20% final WHT, and transfer pricing documentation is required regardless of amount.',
+    opinion:'Classic profit-shifting flag if paid to a foreign parent — expect a TP information request on first audit.',
+    suggestion:'Maintain a management services agreement describing exactly what is provided and how the fee is calculated.' },
+
+  { id:'bank', kw:['bank charg','pos charg','card charg','swift charg'], label:'Bank / card charges', law:'—',
+    taxType:['None'], whtRate:0, deductible:'full',
+    notes:'Paid to licensed financial institutions — outside the WHT regime entirely.',
+    exceptions:'None — this is one of the cleanest lines on the statement.',
+    opinion:'Essentially no audit risk; auditors move past this line quickly.',
+    suggestion:'None needed — just keep bank statements reconciled to the ledger.' },
+
+  { id:'insurance', kw:['insurance','premium'], label:'Insurance premiums', law:'GRA WHT exemption list',
+    taxType:['None'], whtRate:0, deductible:'full',
+    notes:'Premiums paid to a registered resident insurer are explicitly exempt from WHT.',
+    exceptions:'Premiums paid to a non-resident/offshore insurer are NOT exempt — 20% WHT applies (goods/works/services to non-residents) unless a treaty reduces it.',
+    opinion:'Low risk domestically; auditors only look twice if the insurer is offshore.',
+    suggestion:'Insure locally where cover is available, or confirm treaty relief in writing before paying an offshore premium gross.' },
+
+  { id:'entertain', kw:['entertain','protocol','hospitality'], label:'Entertainment / protocol', law:'Act 896 s.130(1)&(2)',
+    taxType:['WHT','VAT'], whtRate:0.075, deductible:'partial',
+    notes:'Deductible only to the extent it is wholly, exclusively and necessarily incurred in producing income.',
+    exceptions:'Client hospitality, gifts and social functions are routinely disallowed in full absent a clear, documented business purpose.',
+    opinion:'One of the most commonly adjusted lines on a GRA field audit — expect a request for attendee lists and business purpose per event.',
+    suggestion:'Separate genuine promotional/advertising spend from entertainment on the face of the accounts — don\'t let one line absorb both.' },
+
+  { id:'advert', kw:['advert','marketing','promotion','publicity'], label:'Advertising / marketing', law:'Act 896 s.130(1)',
+    taxType:['WHT','VAT'], whtRate:0.075, deductible:'full',
+    notes:'Deductible — ordinary cost of generating income.',
+    exceptions:'Sponsorship with a personal/non-business benefit to a director or shareholder can be reclassified as a dividend or benefit-in-kind.',
+    opinion:'Generally accepted with minimal challenge if kept separate from entertainment.',
+    suggestion:'Keep media/agency invoices and campaign briefs on file to evidence business purpose.' },
+
+  { id:'csr', kw:['csr','corporate social','donat','charity','sponsor'], label:'CSR / donations', law:'Act 896 s.130(2); GRA-approved institutions list',
+    taxType:['None'], whtRate:0, deductible:'disallowed',
+    notes:'Fully deductible only if paid to a charitable institution or cause approved in writing by the Commissioner-General.',
+    exceptions:'Approved-institution donations, and relief-of-disaster contributions channelled through approved bodies, can be deductible — everything else is added back.',
+    opinion:'Binary risk: either you can produce the Commissioner-General approval letter for the recipient, or the full amount is disallowed on audit.',
+    suggestion:'Before paying, confirm the recipient\'s approved status in writing and keep it with the payment voucher — don\'t reconstruct this at audit time.' },
+
+  { id:'medical', kw:['staff medical','medical expense','health cover'], label:'Staff medical', law:'5th Sch. (benefits-in-kind)',
+    taxType:['PAYE'], whtRate:0, deductible:'full',
+    notes:'Deductible as a staff cost; if paid to a registered medical provider on the employee\'s behalf it is typically not a taxable benefit.',
+    exceptions:'Cash reimbursed directly to the employee (not to the provider) is usually a taxable PAYE benefit.',
+    opinion:'Auditors check whether payments went to providers or as cash-in-hand to staff.',
+    suggestion:'Route payments to the hospital/insurer directly rather than reimbursing employees in cash.' },
+
+  { id:'training', kw:['staff train','training'], label:'Staff training', law:'Act 896 s.130(1)',
+    taxType:['WHT'], whtRate:0.075, deductible:'full',
+    notes:'Deductible where it upgrades job-related skills.',
+    exceptions:'Overseas academic/degree programmes for an employee\'s personal qualification can be treated as a taxable benefit rather than a business cost.',
+    opinion:'Low risk for short courses; higher scrutiny for expensive overseas programmes.',
+    suggestion:'Tie each training spend to a specific role/skill gap in the personnel file.' },
+
+  { id:'welfare', kw:['staff welfare','welfare'], label:'Staff welfare', law:'5th Sch.',
+    taxType:['PAYE'], whtRate:0, deductible:'full',
+    notes:'Deductible general staff welfare cost.',
+    exceptions:'Individually identifiable cash benefits to specific staff may need to be picked up as taxable pay.',
+    opinion:'Reviewed for whether it is a genuine collective welfare cost versus disguised individual pay.',
+    suggestion:'Keep this line for collective costs (canteen, first aid, etc.); route individual cash benefits through payroll.' },
+
+  { id:'bonus', kw:['staff bonus','bonus'], label:'Staff bonus', law:'5th Sch. (bonus rules)',
+    taxType:['PAYE'], whtRate:0, deductible:'full',
+    notes:'Deductible business cost; taxed on the employee via PAYE, not WHT.',
+    exceptions:'Bonus up to 15% of annual basic salary is taxed at a flat 5%; the excess over 15% is added to employment income and taxed at the employee\'s full marginal rate.',
+    opinion:'Checked for correct PAYE treatment of the 15% threshold, not for corporate deductibility.',
+    suggestion:'Confirm payroll is applying the 15%-threshold rule correctly before year end, not after.' },
+
+  { id:'allowance', kw:['allowance'], label:'Staff allowances', law:'5th Sch. (benefits-in-kind)',
+    taxType:['PAYE'], whtRate:0, deductible:'cond',
+    notes:'Deductible business cost; cash allowances to staff are taxable employment income.',
+    exceptions:'If allowances are functioning as disguised salary to reduce PAYE, GRA can recharacterise and assess PAYE plus penalties.',
+    opinion:'Watch a rising Allowances line running alongside a separate Salaries line — GRA reads that pattern as a red flag for under-declared PAYE.',
+    suggestion:'Make sure every allowance is on the payroll and taxed through PAYE, even where it isn\'t basic salary.' },
+
+  { id:'salaries', kw:['staff salar','salaries','wages','payroll'], label:'Salaries & wages', law:'5th Sch.; SSNIT Act 766',
+    taxType:['PAYE'], whtRate:0, deductible:'full',
+    notes:'Deductible; must be supported by PAYE and SSNIT/Tier 2 compliance.',
+    exceptions:'None if payroll deductions are properly made and remitted.',
+    opinion:'Auditors reconcile this line to the PAYE and SSNIT returns filed for the same period — mismatches invite a payroll audit.',
+    suggestion:'Reconcile the SG&A salaries line to total PAYE/SSNIT remittances every month, not just at year end.' },
+
+  { id:'contract', kw:['contract staff','casual labour','casual labor','temp staff','temporary staff'], label:'Contract / casual staff', law:'Act 896 s.116; substance-over-form',
+    taxType:['WHT'], whtRate:0.075, deductible:'cond',
+    notes:'Deductible; WHT at 7.5% applies if the individuals are genuinely self-employed.',
+    exceptions:'If they work fixed hours under company control with no other clients, GRA can treat them as employees and assess PAYE/SSNIT instead.',
+    opinion:'A volatile or growing "contract staff" line is one of the most common things GRA reclassifies as disguised employment.',
+    suggestion:'Document each contractor with a service contract and evidence of independence (own tools, multiple clients, no fixed hours).' },
+
+  { id:'natservice', kw:['national service'], label:'National service allowance', law:'—',
+    taxType:['None'], whtRate:0, deductible:'full',
+    notes:'Deductible statutory allowance paid to national service personnel.',
+    exceptions:'None beyond keeping the placement letter and payment schedule.',
+    opinion:'Low risk, standard statutory cost.',
+    suggestion:'None needed.' },
+
+  { id:'commission', kw:['commission'], label:'Commission', law:'Act 896 s.116',
+    taxType:['WHT'], whtRate:0.10, deductible:'full',
+    notes:'Deductible; 10% WHT applies to commission paid to a resident individual agent.',
+    exceptions:'Corporate agents fall under the 7.5% services rate instead of the 10% individual rate.',
+    opinion:'Checked for correct rate applied depending on whether the agent is an individual or a company.',
+    suggestion:'Confirm the agent\'s legal form before setting the WHT rate in the payroll/AP system.' },
+
+  { id:'repairs', kw:['repair','maintenance'], label:'Repairs & maintenance', law:'Act 896 s.116; s.12 (capital vs revenue)',
+    taxType:['WHT','VAT'], whtRate:0.075, deductible:'cond',
+    notes:'Deductible if it restores an asset to its original condition (revenue in nature).',
+    exceptions:'Repairs that improve, extend or upgrade an asset beyond original condition are capital and should increase the asset\'s cost, not be expensed.',
+    opinion:'Large, one-off "repairs" invoices are routinely tested for whether they are really capital improvements in disguise.',
+    suggestion:'Get contractors to describe scope of work precisely so capital improvement isn\'t buried inside a repairs invoice.' },
+
+  { id:'fuel', kw:['fuel','lubricant','petrol','diesel'], label:'Fuel & lubricants', law:'Act 896 s.116',
+    taxType:['WHT','VAT'], whtRate:0.03, deductible:'full',
+    notes:'Deductible; treated as a goods purchase (3% WHT), usually below the per-transaction threshold in practice.',
+    exceptions:'GH¢2,000 per-contract threshold generally exempts routine small retail fuel purchases from WHT.',
+    opinion:'Low risk beyond confirming the vehicles are business assets, not personal use.',
+    suggestion:'Log business mileage/usage against fuel spend for higher-value vehicles.' },
+
+  { id:'vehicle', kw:['vehicle'], label:'Vehicle running costs', law:'Act 896 s.116',
+    taxType:['WHT','VAT'], whtRate:0.075, deductible:'cond',
+    notes:'Deductible for business-use vehicles.',
+    exceptions:'Personal-use portion of a company vehicle used by an employee is a taxable benefit-in-kind (5th Sch. motor vehicle benefit table) and should not be a pure business deduction.',
+    opinion:'Checked against the benefits-in-kind vehicle scale to see if a private-use adjustment is missing from payroll.',
+    suggestion:'Apply the standard motor vehicle benefit-in-kind percentage on payroll for any vehicle with personal use.' },
+
+  { id:'localtravel', kw:['travel & transport','local travel','transport'], label:'Travel & transport (local)', law:'Act 896 s.130(1)',
+    taxType:['WHT'], whtRate:0.075, deductible:'full',
+    notes:'Deductible where wholly business-related.',
+    exceptions:'Commuting costs for employees (home to work) are generally not deductible as a business expense.',
+    opinion:'Low-to-moderate risk; mainly tested for personal commuting cost creeping into the line.',
+    suggestion:'Keep trip purpose noted on expense claims above a reasonable threshold.' },
+
+  { id:'overseastravel', kw:['overseas travel','foreign travel','international travel'], label:'Overseas travel', law:'Act 896 s.130(1)',
+    taxType:['WHT'], whtRate:0, deductible:'partial',
+    notes:'Deductible only where wholly, exclusively and necessarily for business purposes.',
+    exceptions:'A trip mixing business and leisure, or without a clear commercial purpose, is disallowed in full or apportioned.',
+    opinion:'Routinely challenged without an itinerary, purpose statement, and attendee/counterparty list.',
+    suggestion:'Attach a one-page purpose memo and itinerary to every overseas travel claim before it is paid.' },
+
+  { id:'utilities', kw:['utilit','electricity','water bill','ecg','gwcl'], label:'Utilities', law:'—',
+    taxType:['None'], whtRate:0, deductible:'full',
+    notes:'Deductible; payments to utility companies fall outside the WHT regime.',
+    exceptions:'None.',
+    opinion:'Low risk — routine operating cost.',
+    suggestion:'None needed.' },
+
+  { id:'internet', kw:['internet','website','hosting','domain'], label:'Internet & website', law:'Act 896 s.116',
+    taxType:['WHT','VAT'], whtRate:0.075, deductible:'full',
+    notes:'Deductible ordinary business cost.',
+    exceptions:'Payments to a non-resident hosting/SaaS provider may trigger 20% non-resident WHT and a VAT reverse charge.',
+    opinion:'Low risk domestically; check for un-withheld foreign SaaS subscriptions.',
+    suggestion:'Confirm whether any hosting/software is billed by a non-resident entity and adjust withholding accordingly.' },
+
+  { id:'comms', kw:['telephone','communication','post & comm','airtime'], label:'Communication', law:'Act 896 s.116',
+    taxType:['WHT'], whtRate:0.03, deductible:'full',
+    notes:'Deductible; usually treated as a goods/airtime purchase.',
+    exceptions:'Below the GH¢2,000 threshold, WHT does not apply.',
+    opinion:'Low risk, immaterial line in most audits.',
+    suggestion:'None needed beyond normal recordkeeping.' },
+
+  { id:'printing', kw:['printing','stationery'], label:'Printing & stationery', law:'Act 896 s.116',
+    taxType:['WHT','VAT'], whtRate:0.03, deductible:'full',
+    notes:'Deductible; treated as a goods purchase.',
+    exceptions:'Below GH¢2,000 per contract, WHT does not apply.',
+    opinion:'Low risk, routine operating cost.',
+    suggestion:'None needed.' },
+
+  { id:'office', kw:['office expense','office supplies'], label:'Office expenses', law:'Act 896 s.116',
+    taxType:['WHT','VAT'], whtRate:0.03, deductible:'full',
+    notes:'Deductible; mixed goods/services — apply 3% or 7.5% depending on the specific invoice.',
+    exceptions:'Below GH¢2,000 per contract, WHT does not apply.',
+    opinion:'Low risk if kept as genuinely operational — watch for personal items being absorbed into this line.',
+    suggestion:'Keep itemised receipts so goods vs services WHT rates can be applied correctly.' },
+
+  { id:'cleaning', kw:['cleaning','sanitation','fumigation'], label:'Cleaning & sanitation', law:'Act 896 s.116',
+    taxType:['WHT','VAT'], whtRate:0.075, deductible:'full',
+    notes:'Deductible service contract cost.',
+    exceptions:'None beyond the GH¢2,000 threshold.',
+    opinion:'Low risk, standard service contract.',
+    suggestion:'None needed.' },
+
+  { id:'security', kw:['security'], label:'Security services', law:'Act 896 s.116',
+    taxType:['WHT','VAT'], whtRate:0.075, deductible:'full',
+    notes:'Deductible service contract cost.',
+    exceptions:'None beyond the GH¢2,000 threshold.',
+    opinion:'Low risk, standard service contract.',
+    suggestion:'None needed.' },
+
+  { id:'reglicense', kw:['registration','license','licence'], label:'Registration & licenses', law:'—',
+    taxType:['None'], whtRate:0, deductible:'full',
+    notes:'Deductible; statutory/government fees fall outside the WHT regime.',
+    exceptions:'None.',
+    opinion:'Low risk, routine statutory cost.',
+    suggestion:'None needed.' },
+
+  { id:'importduty', kw:['import duty','customs duty'], label:'Import duty', law:'Customs Act 891',
+    taxType:['None'], whtRate:0, deductible:'full',
+    notes:'Deductible cost of bringing goods to their present location and condition (capitalise if for a fixed asset; expense if for trading stock).',
+    exceptions:'Duty on capital equipment forms part of the asset\'s cost for capital allowance purposes rather than a straight deduction.',
+    opinion:'Checked to confirm duty on equipment wasn\'t expensed instead of capitalised.',
+    suggestion:'Route import duty on equipment through the fixed asset register, not a P&L expense line.' },
+
+  { id:'selling', kw:['freight','distribution','selling &','selling and'], label:'Selling & distribution', law:'Act 896 s.116',
+    taxType:['WHT','VAT'], whtRate:0.075, deductible:'full',
+    notes:'Deductible ordinary cost of getting goods to customers.',
+    exceptions:'None beyond the GH¢2,000 threshold.',
+    opinion:'Low risk if it maps clearly to sales activity for the period.',
+    suggestion:'None needed beyond normal recordkeeping.' },
+
+  { id:'farming', kw:['farm','agric'], label:'Farming / agricultural expenses', law:'Act 896 s.130(2); Capital Allowance Regs',
+    taxType:['WHT'], whtRate:0.075, deductible:'partial',
+    notes:'Revenue farming inputs (seed, fertiliser, casual field labour) are deductible.',
+    exceptions:'Capital works — boreholes, irrigation systems, land clearing, fencing, structures — must be capitalised into PP&E and claimed via capital allowances, not expensed in one year.',
+    opinion:'One of the most commonly mis-expensed categories — auditors specifically look for capital items hiding in a "farming expenses" account.',
+    suggestion:'Get an item-by-item breakdown before filing; move anything that creates a lasting asset into the fixed asset register.' },
+
+  { id:'depreciation', kw:['depreciation'], label:'Depreciation', law:'Act 896 s.12; Capital Allowance rules',
+    taxType:['None'], whtRate:0, deductible:'disallowed',
+    notes:'Accounting depreciation is added back in full for tax purposes — capital allowances are claimed instead, at the statutory class rates.',
+    exceptions:'None — this add-back is automatic and non-negotiable.',
+    opinion:'Auditors simply confirm the full amount was added back and the capital allowance schedule is correct.',
+    suggestion:'Make sure your tax computation adds this back every year — a missed add-back is a common self-inflicted error.' },
+
+  { id:'baddebt', kw:['bad debt','doubtful debt','impairment','provision'], label:'Bad debts / impairment / provisions', law:'Act 896 s.130; s.17 (bad debt relief)',
+    taxType:['None'], whtRate:0, deductible:'cond',
+    notes:'A bad debt is deductible only once actually written off and it was previously included in taxable income.',
+    exceptions:'General provisions/impairment estimates (not specific write-offs) are disallowed and added back until actually incurred.',
+    opinion:'General provisions are almost always added back on audit — a common source of unexpected assessments.',
+    suggestion:'Keep write-offs specific and documented (board minute, debtor correspondence); don\'t rely on a blanket provision for the tax computation.' },
+
+  { id:'interest', kw:['interest'], label:'Interest expense', law:'Act 896 s.16 (thin cap); s.130(2) for penalty interest',
+    taxType:['WHT'], whtRate:0.08, deductible:'cond',
+    notes:'Loan interest is deductible subject to the thin-capitalisation cap (debt-to-equity limit) under s.16.',
+    exceptions:'Interest/penalty charged BY GRA for late tax payment is never deductible, regardless of amount — confirm which "interest" this line actually is.',
+    opinion:'Auditors first ask whether this is genuine loan interest or a GRA late-payment charge mislabelled as interest expense.',
+    suggestion:'Keep GRA penalty interest on a clearly separate line from loan interest so the add-back is obvious and automatic.' },
+
+  { id:'penalty', kw:['penalty','fine','tax audit','tax assessment','tax adjustment'], label:'Tax penalties / GRA adjustments', law:'Act 896 s.130(2)',
+    taxType:['None'], whtRate:0, deductible:'disallowed',
+    notes:'Never deductible — taxes, fines and penalties are specifically excluded from the general deduction rule.',
+    exceptions:'None — this is a hard rule with no exceptions.',
+    opinion:'Automatic add-back; the only audit question is whether it was actually added back.',
+    suggestion:'Confirm every year that this line is fully added back in the tax computation.' },
+
+  { id:'forex', kw:['exchange loss','forex','foreign exchange'], label:'Foreign exchange loss', law:'Act 896 s.116 (Deductibility of FX losses)',
+    taxType:['None'], whtRate:0, deductible:'cond',
+    notes:'Realised exchange losses on income-producing transactions are generally deductible.',
+    exceptions:'Losses that are unrealised, of a capital nature, or arise between two resident persons are not deductible.',
+    opinion:'Checked to confirm the loss is realised and not simply a year-end revaluation.',
+    suggestion:'Separate realised from unrealised FX movements in the ledger so the tax computation can treat them correctly.' },
+
+  { id:'subscription', kw:['subscription','membership'], label:'Subscriptions & memberships', law:'Act 896 s.130(1)',
+    taxType:['WHT'], whtRate:0.075, deductible:'cond',
+    notes:'Deductible where the subscription is business/professional in nature.',
+    exceptions:'Personal club memberships or social memberships for directors/staff are typically disallowed or treated as a benefit-in-kind.',
+    opinion:'Checked line by line — professional-body dues pass easily, social club dues do not.',
+    suggestion:'Keep professional-body subscriptions separate from social/club memberships on the face of the accounts.' },
+
+  { id:'software', kw:['software','saas','it licen'], label:'Software / IT costs', law:'Act 896 s.116',
+    taxType:['WHT','VAT'], whtRate:0.075, nrRate:0.20, deductible:'full',
+    notes:'Deductible; may be capitalised if it creates a multi-year intangible asset rather than a subscription.',
+    exceptions:'Payments to non-resident software vendors: 20% WHT and possible VAT reverse charge.',
+    opinion:'Checked for whether a perpetual licence was wrongly expensed instead of capitalised as an intangible asset.',
+    suggestion:'Distinguish subscription (expense) from perpetual licence (capitalise) at the point of purchase.' },
+
+  { id:'gift', kw:['gift'], label:'Gifts', law:'Act 896 s.130(1)',
+    taxType:['None'], whtRate:0, deductible:'partial',
+    notes:'Small, incidental promotional gifts are generally accepted.',
+    exceptions:'Gifts to staff are usually a taxable benefit-in-kind; gifts to third parties without clear business purpose are disallowed.',
+    opinion:'Tested for whether "gifts" is really disguised entertainment or undeclared staff benefits.',
+    suggestion:'Route staff gifts through payroll as a benefit; keep third-party gifts small and clearly promotional.' },
+
+  { id:'uniform', kw:['uniform','corporate wear'], label:'Staff uniforms', law:'5th Sch.',
+    taxType:['WHT'], whtRate:0.03, deductible:'full',
+    notes:'Deductible where uniform is a genuine job requirement (branded, protective, or role-specific).',
+    exceptions:'General clothing allowances without a uniform requirement are a taxable benefit.',
+    opinion:'Low risk if genuinely branded/functional workwear.',
+    suggestion:'Keep uniforms branded or role-specific rather than paying a general clothing allowance.' },
+
+  { id:'pension', kw:['pension','ssnit','provident','tier 2','tier 3'], label:'Pension / SSNIT contributions', law:'SSNIT Act 766; Act 896 5th Sch.',
+    taxType:['None'], whtRate:0, deductible:'full',
+    notes:'Deductible employer contributions, subject to statutory caps (Tier 2/3 relief limits).',
+    exceptions:'Employer contributions above the statutory cap become a taxable benefit to the employee.',
+    opinion:'Checked against SSNIT filings for consistency, and against the statutory contribution cap.',
+    suggestion:'Reconcile this line to actual SSNIT/Tier 2 remittance schedules each period.' },
+
+  { id:'goods', kw:['raw material','purchases','packaging','goods purchase','stock purchase','inventory purchase'], label:'Goods / purchases', law:'Act 896 s.116; VAT Act 870',
+    taxType:['WHT','VAT'], whtRate:0.03, deductible:'full',
+    notes:'Deductible cost of sale; input VAT is generally claimable if the supplier is VAT-registered and the output is standard-rated.',
+    exceptions:'Purchases that are trading stock of both buyer and seller are exempt from WHT; below GH¢2,000 per contract, WHT does not apply.',
+    opinion:'Reviewed mainly for whether input VAT was actually claimed (cash-flow point) and for related-party pricing if the supplier is connected.',
+    suggestion:'Confirm every VAT-bearing purchase invoice is captured in the VAT return to claim input tax you\'re entitled to.' },
+];
+
+/* GRA's own characterisation of each expense category — kept separate from the
+   working rules above so it reads as a definition, not just a compliance note. */
+const GRA_VIEWS = {
+  royalty: 'GRA treats royalties as consideration for the use of, or right to use, intellectual or industrial property, know-how, or natural resources. It is a payment GRA specifically watches for cross-border profit shifting and requires arm\'s-length pricing under the Transfer Pricing Regulations.',
+  directorfee: 'GRA distinguishes a director acting in a governance capacity (fees/allowances, final 20% WHT) from a director who is also an employee (salary, taxed under PAYE). The two must not be blended into one payment.',
+  auditfee: 'GRA views statutory audit fees as an ordinary professional service cost, WHT-eligible like any other services contract.',
+  legal: 'GRA applies a strict capital/revenue distinction to legal costs: advisory and dispute costs are revenue; costs of acquiring, defending or perfecting title to an asset are capital and must be added to the asset\'s cost base.',
+  consult: 'GRA treats consultancy as a standard services contract subject to withholding, provided it is not disguised employment or a related-party management charge.',
+  mgttech: 'GRA scrutinises management and technical service fees, especially to a related non-resident party, as a primary transfer-pricing and base-erosion risk area.',
+  bank: 'GRA does not view bank and card processing charges as a withholding tax event — payment is to a regulated financial institution.',
+  insurance: 'GRA\'s position is that premiums to a GRA-registered resident insurer sit outside the withholding regime entirely; the same premium to an offshore insurer is treated as a standard non-resident service payment.',
+  entertain: 'GRA\'s long-standing position is that entertainment/hospitality is deductible only where it is shown, item by item, to be wholly, exclusively and necessarily for the business — general "goodwill" entertaining is not accepted.',
+  advert: 'GRA treats advertising and promotion as an ordinary cost of generating income, distinct from entertainment, provided it is genuinely aimed at the market rather than at individuals.',
+  csr: 'GRA\'s position is binary: donations to an institution on its approved list (or specifically approved in writing) are deductible; anything else, however well-intentioned, is a disallowed application of profit, not a business expense.',
+  medical: 'GRA treats employer-paid medical cover routed to a registered provider as a staff welfare cost; cash paid directly to an employee is reclassified as taxable pay.',
+  training: 'GRA accepts job-related skills training as deductible; it views personal qualification/degree funding as closer to an employee benefit.',
+  welfare: 'GRA\'s view is that collective welfare facilities (canteen, first aid, general amenities) are deductible; benefits traceable to a named individual are pay, not welfare.',
+  bonus: 'GRA applies a specific bonus rule under the Fifth Schedule: up to 15% of annual basic salary is taxed at a flat concessional rate; anything above 15% loses that concession and is taxed as ordinary employment income.',
+  allowance: 'GRA\'s enforcement focus on allowances is whether they are genuine reimbursements/role-related payments or a mechanism to pay part of salary outside PAYE.',
+  salaries: 'GRA expects this line to reconcile exactly to the PAYE and SSNIT/Tier 2 returns filed for the same staff for the same period — it is one of the first cross-checks in a compliance audit.',
+  contract: 'GRA applies a substance-over-form test here: control, exclusivity, integration into the business and lack of own equipment/other clients all point toward employment, regardless of what the contract is titled.',
+  natservice: 'GRA treats the statutory national service allowance as a straightforward deductible cost with no special conditions.',
+  commission: 'GRA\'s rate depends on whether the agent is an individual (10%) or a company/other entity (7.5% services rate) — a common area for rate mix-ups.',
+  repairs: 'GRA applies the classic "restoration vs improvement" test: repairs that put an asset back to its original condition are revenue; work that improves, extends or upgrades it is capital.',
+  fuel: 'GRA treats fuel as a goods purchase; in practice most individual fuel purchases fall under the per-contract withholding threshold.',
+  vehicle: 'GRA expects any personal-use element of a company vehicle to be picked up as a taxable benefit-in-kind on the employee\'s payroll, using the published vehicle benefit scale, alongside the business deduction.',
+  localtravel: 'GRA accepts local business travel but does not accept ordinary home-to-work commuting as a deductible business cost.',
+  overseastravel: 'GRA requires clear, contemporaneous evidence of business purpose for overseas travel — an itinerary and counterpart/attendee details are the minimum it typically asks for.',
+  utilities: 'GRA does not apply withholding to public utility payments (power, water) — they sit outside the regime.',
+  internet: 'GRA treats local internet/hosting as an ordinary services cost; the same service from an offshore provider is a non-resident payment subject to a higher final rate.',
+  comms: 'GRA generally treats telecoms/airtime as a goods-type purchase for withholding purposes.',
+  printing: 'GRA treats printing and stationery as a routine goods purchase with no special conditions.',
+  office: 'GRA has no special category for "office expenses" — it expects the underlying invoices to be examined individually and taxed as the goods or service they actually are.',
+  cleaning: 'GRA treats cleaning/janitorial contracts as an ordinary services cost.',
+  security: 'GRA treats security services as an ordinary services cost, no different from any other outsourced service contract.',
+  reglicense: 'GRA does not apply withholding to statutory fees paid to government bodies for registrations and licences.',
+  importduty: 'GRA\'s customs position is that duty follows the asset — duty on trading stock is a cost of sale, duty on capital equipment is added to that equipment\'s cost for capital allowance purposes.',
+  selling: 'GRA treats freight/distribution as an ordinary cost of sale, subject to standard services withholding.',
+  farming: 'GRA draws a hard line between farm inputs consumed within the season (revenue) and farm infrastructure that outlives the season — boreholes, irrigation, land improvement, fencing (capital, claimed via capital allowances instead).',
+  depreciation: 'GRA does not recognise accounting depreciation for tax at all — it is added back in full every year, with capital allowances at the statutory class rates substituted in its place.',
+  baddebt: 'GRA only allows a bad debt once it is specifically identified, written off, and was previously brought into taxable income — a general provision or estimate is not enough.',
+  interest: 'GRA\'s position separates genuine financing cost (deductible, subject to thin-capitalisation limits) from interest/penalty GRA itself charges for late payment (never deductible under any circumstance).',
+  penalty: 'GRA\'s statutory position, stated plainly in the Income Tax Act, is that no tax, fine or penalty it imposes is ever an allowable deduction — there is no facts-and-circumstances test here.',
+  forex: 'GRA allows realised exchange losses on income-producing transactions but specifically excludes unrealised revaluation losses and losses between two Ghanaian residents.',
+  subscription: 'GRA distinguishes professional/statutory body dues (deductible) from social or lifestyle club memberships (not deductible, or a taxable benefit if paid for an individual).',
+  software: 'GRA\'s view depends on the rights acquired: a time-limited subscription is a service expense; a perpetual licence creates an intangible asset that should be capitalised and amortised.',
+  gift: 'GRA looks at gifts on a case-by-case basis — small, clearly promotional gifts pass; anything given to a specific employee is more likely to be treated as pay.',
+  uniform: 'GRA accepts genuinely branded or role-specific workwear as a business cost; a general clothing allowance is normally a taxable benefit instead.',
+  pension: 'GRA allows employer pension/SSNIT contributions up to the statutory Tier 2/3 caps; anything contributed above the cap is treated as a benefit to the employee.',
+  goods: 'GRA treats this as ordinary trading/production cost — its main interest is whether input VAT was correctly claimed and whether pricing to any connected supplier is at arm\'s length.',
+};
+RULES.forEach(r => { r.graView = GRA_VIEWS[r.id] || 'GRA has not published a category-specific position for this exact line — it will be taxed according to the general nature of the payment (goods, services, rent, etc.) once identified.'; });
+
+const FALLBACK = {
+  label:'Unclassified — manual review required', law:'Not matched to a specific provision',
+  taxType:['Review'], whtRate:0, deductible:'cond',
+  notes:'This description didn\'t match a known category. Treat it as goods (3%), services (7.5%) or a specific named tax type once you know what it actually is.',
+  exceptions:'Unknown until classified — do not assume it is exempt.',
+  opinion:'An unclassified line is itself an audit finding — GRA expects every material expense to have a clear tax position on file.',
+  suggestion:'Rename the line to something specific (e.g. "Legal fees – Q3 dispute") so it can be classified correctly, or classify it manually.',
+  graView:'GRA does not have a "miscellaneous" category — every payment is examined for what it actually is. An unnamed or vague expense description is itself something an auditor will ask about.'
+};
+
+function classify(labelRaw, payeeType){
+  const label = (labelRaw||'').toLowerCase();
+  for(const r of RULES){
+    if(r.kw.some(k=>label.includes(k))) return applyPayee(r, payeeType);
+  }
+  return applyPayee(FALLBACK, payeeType);
+}
+function applyPayee(rule, payeeType){
+  const r = Object.assign({}, rule);
+  if(payeeType==='nonresident' && typeof r.nrRate === 'number'){
+    r.effRate = r.nrRate; r.rateNote = 'Non-resident rate applied';
+  } else {
+    r.effRate = r.whtRate || 0; r.rateNote = payeeType==='nonresident' ? 'No specific non-resident rate on file — verify manually' : 'Resident rate';
+  }
+  return r;
+}
+
+/* =========================================================================
+   STATE + PERSISTENCE
+   ========================================================================= */
+let rows = [];
+let openId = null;
+
+const SAMPLE = [
+  ['Directors\' remuneration',108900,'resident'],
+  ['Auditors\' remuneration',30000,'resident'],
+  ['Bank charges (incl. POS)',38895,'resident'],
+  ['Contract staff',47019,'resident'],
+  ['Cleaning & sanitation',5778,'resident'],
+  ['Vehicle fuel & lubricants',27999,'resident'],
+  ['Internet & website',9240,'resident'],
+  ['Insurance',11503,'resident'],
+  ['Advert/Entertainment & protocol',41436,'resident'],
+  ['Staff medical',36038,'resident'],
+  ['Post & communication',370,'resident'],
+  ['Registration & licenses',45184,'resident'],
+  ['Royalties',239525,'resident'],
+  ['Repairs & maintenance',33494,'resident'],
+  ['Rent - Airport',76153,'resident'],
+  ['Rent - Ranna Plaza',54586,'resident'],
+  ['Printing & stationery',10499,'resident'],
+  ['Travel & transport',12544,'resident'],
+  ['Utilities - Airport',10235,'resident'],
+  ['Utilities - Ranna Plaza',13580,'resident'],
+  ['Office expenses',34199,'resident'],
+  ['Staff training',1300,'resident'],
+  ['Staff welfare',36708,'resident'],
+  ['Vehicle repairs & maintenance',15961,'resident'],
+  ['Corporate social responsibility',100500,'resident'],
+  ['Selling & distribution',16583,'resident'],
+  ['National service',8556,'resident'],
+  ['Staff bonus',27750,'resident'],
+  ['Overseas travel',42462,'resident'],
+  ['Farming expenses',104450,'resident'],
+  ['Allowances',111425,'resident'],
+  ['Professional charges',73740,'resident'],
+  ['Staff salaries & wages',56710,'resident'],
+  ['Interest',9555,'resident'],
+];
+
+function buildRow(label, amt, payeeType){
+  const c = classify(label, payeeType);
+  const wht = Math.round((amt||0) * (c.effRate||0) * 100)/100;
+  return { id: 'r'+Math.random().toString(36).slice(2,9), label, amt:Number(amt)||0, payeeType, c, wht };
+}
+
+async function loadState(){
+  try{
+    const res = await window.storage.get('levyline-rows', false);
+    if(res && res.value){
+      const parsed = JSON.parse(res.value);
+      rows = parsed.map(p=>buildRow(p.label,p.amt,p.payeeType||'resident'));
+      render(); return;
+    }
+  }catch(e){ /* no saved state yet */ }
+  loadSample(false);
+}
+async function saveState(){
+  try{
+    await window.storage.set('levyline-rows', JSON.stringify(rows.map(r=>({label:r.label,amt:r.amt,payeeType:r.payeeType}))), false);
+  }catch(e){ console.warn('save failed', e); }
+}
+function loadSample(save=true){
+  rows = SAMPLE.map(([l,a,p])=>buildRow(l,a,p));
+  render();
+  if(save) saveState();
+}
+
+/* =========================================================================
+   RENDER
+   ========================================================================= */
+const fmt = n => 'GH¢' + (Number(n)||0).toLocaleString('en-GH',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtShort = n => {
+  n = Number(n)||0;
+  if(Math.abs(n) >= 1000000) return 'GH¢'+(n/1000000).toFixed(2)+'M';
+  if(Math.abs(n) >= 1000) return 'GH¢'+(n/1000).toFixed(1)+'k';
+  return fmt(n);
+};
+const badgeClass = { full:'b-full', cond:'b-cond', partial:'b-partial', disallowed:'b-disallowed' };
+const badgeText  = { full:'Fully deductible', cond:'Conditional', partial:'Partially deductible', disallowed:'Disallowed' };
+
+function getFilters(){
+  return {
+    text: (document.getElementById('filt-text')?.value||'').toLowerCase().trim(),
+    tax: document.getElementById('filt-tax')?.value||'',
+    status: document.getElementById('filt-status')?.value||'',
+  };
+}
+function applyFilters(list){
+  const f = getFilters();
+  return list.filter(r=>{
+    if(f.text && !(r.label.toLowerCase().includes(f.text) || r.c.law.toLowerCase().includes(f.text))) return false;
+    if(f.tax && !r.c.taxType.includes(f.tax)) return false;
+    if(f.status && r.c.deductible !== f.status) return false;
+    return true;
+  });
+}
+
+function render(){
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  let totalAmt=0, totalWht=0, condAmt=0, badAmt=0;
+  rows.forEach(r=>{
+    totalAmt += r.amt; totalWht += r.wht;
+    if(r.c.deductible==='disallowed') badAmt += r.amt;
+    if(r.c.deductible==='cond' || r.c.deductible==='partial') condAmt += r.amt;
+  });
+
+  const visible = applyFilters(rows);
+  let visAmt=0, visWht=0;
+
+  visible.forEach(r=>{
+    visAmt += r.amt; visWht += r.wht;
+    const tr = document.createElement('tr');
+    tr.className = openId===r.id ? 'open' : '';
+    tr.innerHTML = `
+      <td>${openId===r.id?'▾':'▸'}</td>
+      <td><strong>${escapeHtml(r.label)}</strong></td>
+      <td class="num">${fmt(r.amt)}</td>
+      <td style="font-size:11.5px;color:#5b6478;">${escapeHtml(r.c.law)}</td>
+      <td>${r.c.taxType.map(t=>`<span class="taxtag">${t}${t==='WHT'?' '+Math.round(r.c.effRate*1000)/10+'%':''}</span>`).join('')}</td>
+      <td><span class="badge ${badgeClass[r.c.deductible]}">${badgeText[r.c.deductible]}</span></td>
+      <td class="num">${r.wht>0?fmt(r.wht):'—'}</td>
+      <td><button class="rm" title="Remove line" data-rm="${r.id}">&times;</button></td>
+    `;
+    tr.addEventListener('click', (e)=>{
+      if(e.target.closest('[data-rm]')) return;
+      openId = openId===r.id ? null : r.id;
+      render();
+    });
+    tbody.appendChild(tr);
+
+    if(openId===r.id){
+      const dr = document.createElement('tr');
+      dr.className='detail-row';
+      dr.innerHTML = `<td colspan="8"><div class="detail">
+        <div class="block full" style="background:#f6effa;border:1px solid #e3cdee;border-radius:8px;padding:10px 14px;">
+          <h4 style="color:#6a2384;">GRA view / definition of this line</h4>
+          <p>${escapeHtml(r.c.graView)}</p>
+        </div>
+        <div class="block"><h4>Note / explanation</h4><p>${escapeHtml(r.c.notes)}</p></div>
+        <div class="block"><h4>Exceptions</h4><p>${escapeHtml(r.c.exceptions)}</p></div>
+        <div class="block"><h4>Tax auditor's opinion</h4><p>${escapeHtml(r.c.opinion)}</p></div>
+        <div class="block"><h4>How to reduce liability / risk</h4><p>${escapeHtml(r.c.suggestion)}</p></div>
+        <div class="block full"><span class="cite">${escapeHtml(r.c.law)}</span> ${r.payeeType==='nonresident'?'<span class="cite" style="background:#b0243a;">Non-resident payee</span>':''} ${r.c.rateNote?`<span style="font-size:11px;color:#5b6478;margin-left:6px;">${escapeHtml(r.c.rateNote)}</span>`:''}
+          <button class="btn btn-ghost" style="margin-left:10px;padding:4px 10px;font-size:11px;" data-ask="${r.id}">Ask about this line →</button>
+        </div>
+      </div></td>`;
+      tbody.appendChild(dr);
+    }
+  });
+
+  document.getElementById('rowCount').textContent = rows.length + ' line' + (rows.length===1?'':'s');
+  document.getElementById('totAmt').textContent = fmt(visAmt);
+  document.getElementById('totWht').textContent = fmt(visWht);
+  document.getElementById('kpiCount').textContent = rows.length;
+  document.getElementById('kpiTotal').textContent = fmtShort(totalAmt);
+  document.getElementById('kpiWht').textContent = fmtShort(totalWht);
+  document.getElementById('kpiCond').textContent = fmtShort(condAmt);
+  document.getElementById('kpiBad').textContent = fmtShort(badAmt);
+  const fc = document.getElementById('filtCount');
+  if(fc) fc.textContent = visible.length===rows.length ? `Showing all ${rows.length} lines` : `Showing ${visible.length} of ${rows.length} lines`;
+
+  renderDonut(totalAmt);
+  renderBars();
+  refreshAskScope();
+}
+
+function refreshAskScope(){
+  const sel = document.getElementById('ask-scope');
+  if(!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">Whole register / general question</option>' +
+    rows.map(r=>`<option value="${r.id}">${escapeHtml(r.label)} (${fmtShort(r.amt)})</option>`).join('');
+  if(rows.some(r=>r.id===prev)) sel.value = prev;
+}
+
+function escapeHtml(s){
+  return String(s??'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function renderDonut(total){
+  const groups = { full:0, cond:0, partial:0, disallowed:0 };
+  rows.forEach(r=>{ groups[r.c.deductible]+=r.amt; });
+  const colors = { full:'#1a7f4e', cond:'#3a5cc4', partial:'#9a6300', disallowed:'#b0243a' };
+  const labels = { full:'Fully deductible', cond:'Conditional', partial:'Partially deductible', disallowed:'Disallowed' };
+
+  const svg = document.getElementById('donut');
+  svg.innerHTML='';
+  const cx=64, cy=64, r=50, rInner=30;
+  let angle = -90;
+  const legend = document.getElementById('donutLegend');
+  legend.innerHTML='';
+
+  if(total<=0){
+    svg.innerHTML = `<circle cx="64" cy="64" r="50" fill="#eef0f7"/>`;
+  }
+  Object.keys(groups).forEach(key=>{
+    const val = groups[key];
+    if(val<=0) return;
+    const frac = val/total;
+    const sweep = frac*360;
+    const path = describeArc(cx,cy,r,rInner,angle,angle+sweep);
+    const el = document.createElementNS('http://www.w3.org/2000/svg','path');
+    el.setAttribute('d', path);
+    el.setAttribute('fill', colors[key]);
+    svg.appendChild(el);
+    angle += sweep;
+
+    const row = document.createElement('div');
+    row.className='row';
+    row.innerHTML = `<span class="sw" style="background:${colors[key]}"></span>${labels[key]}<span class="amt">${fmtShort(val)}</span>`;
+    legend.appendChild(row);
+  });
+}
+function polar(cx,cy,r,angDeg){
+  const a = (angDeg-90)*Math.PI/180;
+  return [cx + r*Math.cos(a), cy + r*Math.sin(a)];
+}
+function describeArc(cx,cy,rOuter,rInner,startAngle,endAngle){
+  startAngle+=90; endAngle+=90;
+  const large = (endAngle-startAngle) % 360 > 180 ? 1 : 0;
+  const [x1,y1] = polar(cx,cy,rOuter,startAngle);
+  const [x2,y2] = polar(cx,cy,rOuter,endAngle);
+  const [x3,y3] = polar(cx,cy,rInner,endAngle);
+  const [x4,y4] = polar(cx,cy,rInner,startAngle);
+  return `M ${x1} ${y1} A ${rOuter} ${rOuter} 0 ${large} 1 ${x2} ${y2} L ${x3} ${y3} A ${rInner} ${rInner} 0 ${large} 0 ${x4} ${y4} Z`;
+}
+
+function renderBars(){
+  const byCat = {};
+  rows.forEach(r=>{
+    if(r.wht<=0) return;
+    byCat[r.c.label] = (byCat[r.c.label]||0) + r.wht;
+  });
+  const entries = Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,7);
+  const max = entries.length ? entries[0][1] : 1;
+  const el = document.getElementById('whtBars');
+  el.innerHTML = entries.length ? '' : '<div style="font-size:12px;color:#5b6478;">No withholding tax due on the lines currently loaded.</div>';
+  entries.forEach(([name,val])=>{
+    const row = document.createElement('div');
+    row.className='bar-row';
+    row.innerHTML = `<div class="name" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.max(4,val/max*100)}%"></div></div>
+      <div class="amt">${fmtShort(val)}</div>`;
+    el.appendChild(row);
+  });
+}
+
+/* =========================================================================
+   EVENTS
+   ========================================================================= */
+document.getElementById('addBtn').addEventListener('click', addLine);
+document.getElementById('f-amt').addEventListener('keydown', e=>{ if(e.key==='Enter') addLine(); });
+document.getElementById('f-label').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('f-amt').focus(); });
+
+function addLine(){
+  const label = document.getElementById('f-label').value.trim();
+  const amt = parseFloat(document.getElementById('f-amt').value);
+  const payeeType = document.getElementById('f-vat').value;
+  if(!label || isNaN(amt)){
+    document.getElementById('f-label').focus();
+    return;
+  }
+  rows.push(buildRow(label, amt, payeeType));
+  document.getElementById('f-label').value='';
+  document.getElementById('f-amt').value='';
+  document.getElementById('f-label').focus();
+  openId = rows[rows.length-1].id;
+  render();
+  saveState();
+  document.getElementById('datasetTag').textContent = 'Your workspace — ' + rows.length + ' line(s)';
+}
+
+document.getElementById('sampleBtn').addEventListener('click', ()=>{
+  loadSample(true);
+  document.getElementById('datasetTag').textContent = 'Sample: Chocoluv Ltd — SG&A FY2025';
+});
+document.getElementById('clearBtn').addEventListener('click', ()=>{
+  rows = []; openId=null; render(); saveState();
+  document.getElementById('datasetTag').textContent = 'Empty workspace';
+});
+document.getElementById('tbody').addEventListener('click', (e)=>{
+  const rm = e.target.closest('[data-rm]');
+  if(rm){
+    e.stopPropagation();
+    rows = rows.filter(r=>r.id!==rm.dataset.rm);
+    render(); saveState();
+    return;
+  }
+  const ask = e.target.closest('[data-ask]');
+  if(ask){
+    e.stopPropagation();
+    document.getElementById('ask-scope').value = ask.dataset.ask;
+    document.getElementById('ask-q').focus();
+    document.querySelector('.askcard').scrollIntoView({behavior:'smooth', block:'center'});
+  }
+});
+
+/* ---------- Filters ---------- */
+['filt-text'].forEach(id=>document.getElementById(id).addEventListener('input', render));
+['filt-tax','filt-status'].forEach(id=>document.getElementById(id).addEventListener('change', render));
+document.getElementById('filt-clear').addEventListener('click', ()=>{
+  document.getElementById('filt-text').value='';
+  document.getElementById('filt-tax').value='';
+  document.getElementById('filt-status').value='';
+  render();
+});
+
+/* ---------- Upload (CSV / XLSX) ---------- */
+document.getElementById('uploadBtn').addEventListener('click', ()=>document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev)=>{
+    try{
+      let aoa;
+      if(file.name.toLowerCase().endsWith('.csv')){
+        const wb = XLSX.read(ev.target.result, {type:'string'});
+        aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1});
+      } else {
+        const wb = XLSX.read(ev.target.result, {type:'array'});
+        aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1});
+      }
+      bulkImport(aoa);
+    }catch(err){
+      alert('Could not read that file. Make sure it is a plain CSV or .xlsx with columns: Expense line, Amount, (optional) Payee.');
+      console.error(err);
+    }
+    document.getElementById('fileInput').value='';
+  };
+  if(file.name.toLowerCase().endsWith('.csv')) reader.readAsText(file);
+  else reader.readAsArrayBuffer(file);
+});
+
+function bulkImport(aoa){
+  if(!aoa || !aoa.length) return;
+  // detect header row
+  let startRow = 0;
+  const head = (aoa[0]||[]).map(x=>String(x||'').toLowerCase());
+  const hasHeader = head.some(h=>h.includes('expense')||h.includes('line')||h.includes('description'));
+  let colLabel=0, colAmt=1, colPayee=2;
+  if(hasHeader){
+    startRow = 1;
+    head.forEach((h,i)=>{
+      if(h.includes('expense')||h.includes('line')||h.includes('description')) colLabel=i;
+      else if(h.includes('amount')||h.includes('value')||h.includes('ghs')||h.includes('gh')) colAmt=i;
+      else if(h.includes('payee')||h.includes('resident')) colPayee=i;
+    });
+  }
+  let added = 0;
+  for(let i=startRow;i<aoa.length;i++){
+    const row = aoa[i];
+    if(!row || !row.length) continue;
+    const label = String(row[colLabel]||'').trim();
+    const amtRaw = row[colAmt];
+    const amt = parseFloat(String(amtRaw||'').toString().replace(/[^0-9.\-]/g,''));
+    if(!label || isNaN(amt)) continue;
+    const payeeRaw = String(row[colPayee]||'').toLowerCase();
+    const payeeType = payeeRaw.includes('non') ? 'nonresident' : 'resident';
+    rows.push(buildRow(label, amt, payeeType));
+    added++;
+  }
+  if(added===0){
+    alert('No valid rows found. Expected columns: Expense line, Amount, (optional) Payee — with the expense line and a numeric amount in every row.');
+    return;
+  }
+  render(); saveState();
+  document.getElementById('datasetTag').textContent = `Uploaded — ${added} line(s) added, ${rows.length} total`;
+}
+
+/* ---------- Download (exports the currently filtered view) ---------- */
+document.getElementById('downloadBtn').addEventListener('click', ()=>{
+  const visible = applyFilters(rows);
+  if(!visible.length){ alert('Nothing to export — add or upload some expense lines first.'); return; }
+  const data = visible.map(r=>({
+    'Expense line': r.label,
+    'Amount (GH¢)': r.amt,
+    'Payee': r.payeeType==='nonresident' ? 'Non-resident' : 'Resident',
+    'Governing position': r.c.law,
+    'Tax type': r.c.taxType.join(', '),
+    'WHT rate applied': r.c.effRate ? (Math.round(r.c.effRate*1000)/10 + '%') : '—',
+    'Deductible status': badgeText[r.c.deductible],
+    'Remittable to GRA (GH¢)': r.wht,
+    'GRA view / definition': r.c.graView,
+    'Note / explanation': r.c.notes,
+    'Exceptions': r.c.exceptions,
+    "Tax auditor's opinion": r.c.opinion,
+    'Suggestion to reduce liability': r.c.suggestion,
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  ws['!cols'] = [{wch:28},{wch:14},{wch:12},{wch:26},{wch:14},{wch:12},{wch:16},{wch:16},{wch:40},{wch:40},{wch:40},{wch:40},{wch:40}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Expense Tax Register');
+  XLSX.writeFile(wb, 'levyline-expense-tax-register.xlsx');
+});
+
+/* ---------- Ask module ---------- */
+document.querySelectorAll('.chip').forEach(chip=>{
+  chip.addEventListener('click', ()=>{
+    document.getElementById('ask-q').value = chip.dataset.q;
+    askQuestion();
+  });
+});
+document.getElementById('askBtn').addEventListener('click', askQuestion);
+document.getElementById('ask-q').addEventListener('keydown', e=>{ if(e.key==='Enter') askQuestion(); });
+
+async function askQuestion(){
+  const q = document.getElementById('ask-q').value.trim();
+  if(!q) { document.getElementById('ask-q').focus(); return; }
+  const scopeId = document.getElementById('ask-scope').value;
+  const scoped = scopeId ? rows.find(r=>r.id===scopeId) : null;
+
+  const box = document.getElementById('answerBox');
+  const body = document.getElementById('answerBody');
+  const src = document.getElementById('answerSrc');
+  box.classList.add('show');
+  src.className = 'src'; src.textContent = 'Thinking';
+  src.classList.add('loading-dots');
+  body.innerHTML = '<p style="color:#9aa1b3;">Working on it…</p>';
+
+  const live = await tryLiveAnswer(q, scoped);
+  if(live){
+    src.classList.remove('loading-dots');
+    src.className = 'src src-live'; src.textContent = 'Live analysis';
+    body.innerHTML = live.split('\n\n').map(p=>`<p>${escapeHtml(p)}</p>`).join('');
+    return;
+  }
+  const offline = offlineAnswer(q, scoped);
+  src.classList.remove('loading-dots');
+  src.className = 'src src-offline'; src.textContent = 'Offline knowledge base';
+  body.innerHTML = offline.split('\n\n').map(p=>`<p>${escapeHtml(p)}</p>`).join('');
+}
+
+async function tryLiveAnswer(question, scoped){
+  try{
+    const context = scoped
+      ? `The user is asking specifically about this loaded expense line: "${scoped.label}" (GH¢${scoped.amt}, payee: ${scoped.payeeType}). Its current classification: category=${scoped.c.label}, law=${scoped.c.law}, taxType=${scoped.c.taxType.join('/')}, WHT rate=${scoped.c.effRate*100}%, deductible=${scoped.c.deductible}, GRA view="${scoped.c.graView}", notes="${scoped.c.notes}", exceptions="${scoped.c.exceptions}".`
+      : `The user has ${rows.length} expense line(s) loaded, totalling GH¢${rows.reduce((s,r)=>s+r.amt,0).toFixed(2)}, with categories: ${[...new Set(rows.map(r=>r.c.label))].join(', ')}.`;
+    const system = `You are the analysis module inside "Levy Line", a Ghana GRA expense-line tax classification tool. Your ONLY job is answering questions about the tax treatment (withholding tax, VAT, PAYE, deductibility under the Income Tax Act 2015/Act 896, and the Revenue Administration Act 2016/Act 915) of expense lines on a company income statement. Stay strictly within that scope — if asked something unrelated, redirect back to expense-line tax classification. Be concise (3-5 short paragraphs max), concrete, and cite the relevant Act/section where you can. Do not repeat the context back verbatim; answer the actual question. ${context}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(()=>controller.abort(), 15000);
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST', headers:{'Content-Type':'application/json'}, signal: controller.signal,
+      body: JSON.stringify({
+        model:'claude-sonnet-4-6', max_tokens:700,
+        system: system,
+        messages:[{role:'user', content: question}]
+      })
+    });
+    clearTimeout(timeout);
+    if(!res.ok) return null;
+    const data = await res.json();
+    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n\n').trim();
+    return text || null;
+  }catch(err){
+    return null;
+  }
+}
+
+function offlineAnswer(question, scoped){
+  const q = question.toLowerCase();
+  let target = scoped;
+  if(!target){
+    target = rows.find(r=>q.includes(r.label.toLowerCase())) ||
+             rows.find(r=>r.label.toLowerCase().split(/\s+/).some(w=>w.length>3 && q.includes(w)));
+  }
+  if(!target){
+    if(rows.length===0){
+      return 'This tool answers questions about expense-line tax treatment under Ghana\'s GRA rules — but there\'s nothing loaded yet. Add an expense line above, or pick one from the "Line" dropdown, then ask again.';
+    }
+    return `I couldn't tell which loaded line this is about. Pick a specific line from the dropdown above, or mention its name in your question (loaded lines: ${rows.map(r=>r.label).join(', ')}). Levy Line only answers questions about expense-line tax classification — withholding tax, VAT, deductibility and audit risk under Ghana's Income Tax Act and Revenue Administration Act.`;
+  }
+  const c = target.c;
+  if(/why|disallow|reject|risk|reclassif/.test(q)){
+    return `${target.label} is currently classified as "${badgeText[c.deductible]}".\n\n${c.exceptions}\n\n${c.opinion}`;
+  }
+  if(/rate|how much|withhold|remit|pay to gra/.test(q)){
+    return `${target.label} attracts ${c.taxType.join(' / ')} treatment. The applicable rate here is ${(c.effRate*100).toFixed(1)}%, giving a remittable amount of ${fmt(target.wht)} on the GH¢${target.amt.toLocaleString()} loaded for this line.\n\n${c.notes}`;
+  }
+  if(/reduce|lower|minimi|avoid|save|manage/.test(q)){
+    return `${c.suggestion}\n\nBroader context: ${c.opinion}`;
+  }
+  if(/gra view|definition|what is|classif|consider/.test(q)){
+    return `${c.graView}\n\nGoverning position: ${c.law}.`;
+  }
+  if(/vat/.test(q)){
+    return c.taxType.includes('VAT')
+      ? `${target.label} typically carries VAT from a VAT-registered supplier; input VAT is generally claimable against output VAT if the supply is standard-rated and used in making taxable supplies.\n\n${c.notes}`
+      : `${target.label} does not typically carry a VAT dimension worth tracking separately — its main tax question is ${c.taxType.join('/')}' treatment.\n\n${c.notes}`;
+  }
+  return `${target.label}: ${c.notes}\n\nGRA view: ${c.graView}\n\n${c.opinion}`;
+}
+
+const SECTOR_DATA = {"Universal": [["UNIVERSAL — WORKFORCE TAXATION & BENEFITS"], ["Applies underneath every sector: board of directors to junior staff, and all forms of cash, in-kind and allowance pay"], [], ["Tax / Compliance Area", "Legal Basis", "Standard Treatment", "Common Accountant Error", "Auditor's Corrective / Reclassification View"], ["Employment income scope", "Act 896, s.3 & Fourth Schedule", "Gains and profits from employment are taxed in full — salary, wages, leave pay, fees, commissions, gratuities, overtime, bonuses, and any benefit or allowance whether cash or in kind.", "Employer excludes non-cash items (car, housing, loans) from the monthly PAYE base and only taxes cash salary.", "Reconstructs the full package including benefits-in-kind, assesses the PAYE shortfall across the audit period plus interest and penalty."], ["Board / director fees", "Act 896 withholding tax schedule", "20% withholding tax on fees or allowances paid to a resident director, manager, trustee or board member.", "Sitting allowances paid gross with no withholding, or logged as a \"reimbursement\" to avoid the deduction.", "Recharacterises the payment as a director's fee, applies the 20% withholding retrospectively, and assesses penalty for late/non-remittance."], ["Employee vs independent consultant", "Act 896 general employment definition; substance-over-form test", "A genuine contractor supplies own tools/equipment, serves multiple clients, and invoices against defined deliverables.", "A person works fixed hours, under supervision, for one payer only, over a long period — but is labelled a \"consultant\" and paid gross against a WHT invoice instead of through payroll.", "Reclassifies the relationship as employment from its true start date, assesses PAYE and SSNIT arrears for the full period, and may disallow any WHT credit the \"contractor\" had claimed."], ["Overtime concession", "Act 896 Fourth Schedule", "5% on overtime up to 50% of monthly basic salary, 10% on the excess — available only to a Qualifying Junior Employee whose annual qualifying income does not exceed GH¢18,000.", "The concessionary rate is applied to supervisors, management staff, or juniors whose total annual income in fact exceeds GH¢18,000.", "Tests the GH¢18,000 threshold per employee per year; where breached, recomputes the overtime pay at the full progressive PAYE rate and back-assesses the difference."], ["Bonus cap", "Act 896 Fourth Schedule", "5% on a bonus up to 15% of annual basic salary; the excess above 15% is added back to employment income and taxed at the applicable progressive rate.", "The 15% cap is tested against the bonus amount itself instead of against annual basic salary, understating the taxable excess.", "Recalculates the cap against audited annual basic salary and reassesses the excess portion at the employee's marginal rate."], ["Benefits-in-kind not grossed up", "Act 896 Fourth Schedule (vehicle, accommodation, loan benefits)", "Each benefit is quantified as a fixed percentage of cash emoluments (see the schedule below) and added to income before PAYE is computed.", "A company vehicle, free housing, or a staff loan is provided but never valued and included in the monthly payroll computation.", "Computes the benefit at the statutory percentage and backdates the PAYE assessment across the audit period — typically the most material adjustment in a payroll audit."], ["Round-sum allowances vs reimbursement", "General principle under Act 896", "A genuine reimbursement of a receipted, specific business expense is not employment income; a fixed round-sum allowance paid regardless of actual spend is fully taxable.", "A fixed monthly \"fuel\" or \"entertainment\" allowance is treated as a tax-free reimbursement with no expense report or receipt behind it.", "Reclassifies the allowance as taxable pay and assesses PAYE on the full amount for the period it was paid without support."], ["SSNIT contribution base", "SSNIT Act / current SSNIT guidance", "5.5% employee contribution on cash emoluments; employer contribution paid in addition (confirm current employer percentage before advising).", "Employer applies the same computation base for SSNIT as for PAYE benefits-in-kind without checking SSNIT's own (narrower) definition of contributable pay.", "Flags the mismatch between the PAYE and SSNIT bases and requests a reconciliation of contributions paid against payroll records."], [], ["Reference schedule — motor vehicle & accommodation benefits (% of total cash emoluments)"], ["Vehicle, driver and fuel", "12.5%, capped at GH¢1,500/month"], ["Vehicle and fuel (no driver)", "10%, capped at GH¢1,250/month"], ["Vehicle only", "5%, capped at GH¢625/month"], ["Fuel only", "5%, capped at GH¢625/month"], ["Accommodation with furnishing", "10%"], ["Accommodation only", "7.5%"], ["Furnishing only", "2.5%"], ["Shared accommodation", "2.5%"], [], ["Worked example — benefits-in-kind grossed into monthly PAYE base"], ["Line", "Amount", "Basis"], ["Monthly cash emoluments (basic + cash allowances)", 8000, "Input — from payroll"], ["Vehicle benefit: driver and fuel provided", 1000, "12.5% of emoluments, capped at GH¢1,500/month"], ["Accommodation benefit: with furnishing", 800, "10% of emoluments"], ["Total monthly taxable employment income", 9800, "Emoluments + vehicle benefit + accommodation benefit — this is the figure PAYE should be computed on, not the GH¢8,000 cash salary alone"]], "Cross-Cutting Schemes": [["CROSS-CUTTING SCHEMES"], ["Patterns that recur in every sector — not tied to one industry — with how a tax auditor tests for them and reconstructs the position"], [], ["Scheme 1 — Related-party management/consultancy fee stripping profit"], ["Trading Company Ltd is owned by three shareholders who also own a separate advisory company, Founders Consult Ltd. Trading Company pays Founders Consult an annual \"management fee\" for services with no contract, deliverables log, or timesheets on file."], ["Line", "As Reported", "Auditor's Reconstruction", "Note"], ["Revenue", 10000000, 10000000, "Not in dispute"], ["Genuine operating expenses", -6700000, -6700000, "Not in dispute"], ["Management fee to related party", -1800000, -300000, "Reconstructed at the benchmarked arm's-length rate for comparable advisory work"], ["Profit before tax", 1500000, 3000000, "Revenue less expenses less the fee, reported vs reconstructed"], [], ["Detection triggers"], ["•  Common directors or shareholders between the paying company and the fee recipient"], ["•  No contract, scope of work, deliverables register, or timesheets evidencing the service"], ["•  The fee is a round, recurring figure rather than tied to specific engagements"], ["•  The fee moves in step with the paying company's profit rather than with the volume of work performed"], ["•  The fee is materially above benchmarked rates for comparable, unconnected advisory engagements"], [], ["Consequence"], ["The disallowed excess is added back to chargeable income and CIT is reassessed on the reconstructed profit, plus interest and penalty. The excess is also recharacterised as a distribution to the connected owners, triggering dividend withholding tax (8%), and the recipient company's own return is examined for whether the \"fee income\" corresponds to real services rendered."], [], ["Scheme 2 — Free Zone company routing margin to a related offshore trading entity"], ["Zonal Foods Ltd, a licensed Free Zone manufacturer enjoying 0% tax on export income, sells 1,000 tonnes of output to a related offshore trader, Atlantic Commodities, at GH¢8,000/tonne. Atlantic Commodities immediately on-sells the same product to unrelated European buyers at GH¢12,500/tonne — closer to the genuine market benchmark."], ["Line", "As Reported", "Auditor's Reconstruction", "Note"], ["Export price per tonne", 8000, 12500, "Reconstructed to the arm's-length/market-benchmark price"], ["Revenue (1,000 tonnes)", 8000000, 12500000, "Price per tonne x volume"], ["Cost of production", -5500000, -5500000, "Not in dispute"], ["Profit", 2500000, 7000000, "Even at 0% tax during the exemption period this margin still matters — see consequence"], [], ["Detection triggers"], ["•  Related ownership or common control between the Free Zone company and the offshore trading entity"], ["•  The related trader's onward sale price to unrelated third parties is materially higher than the related-party transfer price"], ["•  No transfer pricing documentation or comparable-transaction benchmarking on file for the related-party export price"], ["•  The export destination is a low-substance trading entity rather than the ultimate commercial buyer"], [], ["Consequence"], ["Ghana's transfer pricing rules require arm's-length pricing on related-party transactions regardless of any income tax exemption — a tax holiday does not automatically remove this requirement or any separate levy computed on the same profit base. Under-pricing during the exemption period also understates the company's true profit history, which resurfaces once the 10-year holiday ends. Where the \"export\" is found to be a related-party pass-through rather than a genuine sale to the end market, the Free Zone status of the transaction can itself be challenged."], [], ["Scheme 3 — Round-tripping / circular invoicing"], ["Company A and Company B share common ownership. Of Company A's reported GH¢5,000,000 annual turnover, GH¢800,000 relates to a \"sale\" to Company B with no waybill, delivery record, or corresponding stock movement."], ["Line", "As Reported", "Auditor's Reconstruction", "Note"], ["Reported turnover", 5000000, "", "Includes the unsubstantiated related-party leg"], ["Unsubstantiated circular sale", -800000, "", "No delivery evidence or matching stock movement"], ["Reconstructed turnover", "", 4200000, "Reported turnover less the unsubstantiated leg"], [], ["Detection triggers"], ["•  Identical or near-identical invoice amounts flowing between related parties within a short period"], ["•  No delivery evidence — waybills, logistics/GPS records, or goods-received notes"], ["•  Stock levels do not move in line with the reported sale and repurchase"], ["•  Input VAT claimed on a purchase with no matching reduction in the counterparty's stock"], ["•  Common directors, shareholders, or registered address between the two entities"], [], ["Consequence"], ["Turnover and input VAT credit are restated downward to exclude the unsubstantiated leg, which can also affect whether the minimum-chargeable-income test applies. Where the round-tripping was used to meet a bank covenant or a public tender pre-qualification threshold, that carries separate legal exposure outside the tax assessment itself."], [], ["Scheme 4 — Thin capitalisation — related-party loan interest stripping"], ["A Ghanaian subsidiary of a foreign group is funded with equity of GH¢1,000,000 and a related-party shareholder loan of GH¢20,000,000 at 18% interest, generating GH¢3,600,000 of deductible interest annually that flows out of Ghana as a cost rather than as a non-deductible dividend."], ["Line", "As Reported", "Auditor's Reconstruction", "Note"], ["Interest expense claimed", -3600000, "", "Full amount deducted as reported"], ["Interest allowable within the statutory safe-harbour debt level", "", -540000, "Illustrative — confirm the current debt-to-equity safe-harbour ratio under Act 896 before applying"], ["Disallowed interest add-back", "", 3060000, "Interest claimed less interest allowable within the safe harbour"], [], ["Detection triggers"], ["•  Debt-to-equity ratio materially above the statutory safe-harbour limit"], ["•  Loan sourced from a related/group treasury entity rather than an independent lender"], ["•  Interest rate not benchmarked to a comparable arm's-length facility"], ["•  No formal loan agreement, or repayment terms inconsistent with genuine third-party debt"], ["•  Interest is capitalised or rolled up rather than actually paid — cash flow does not support genuine debt service"], [], ["Consequence"], ["Interest deduction is restricted to the amount attributable to debt within the permitted ratio; the disallowed excess is added back to chargeable income. Withholding tax on interest actually paid still applies regardless of the deduction disallowance, and the disallowed excess is sometimes recharacterised as a dividend for withholding tax purposes."], [], ["Scheme 5 — Directors' or shareholders' personal expenses run through the company"], ["A director's school fees, home renovation, and family vacation — GH¢900,000 in total — are posted through the company's \"professional fees,\" \"repairs and maintenance,\" and \"travel and entertainment\" expense accounts."], ["Line", "As Reported", "Auditor's Reconstruction", "Note"], ["Personal expenditure claimed as a business deduction", -900000, 0, "Disallowed in full — no connection to the company's trade"], ["Chargeable income add-back", "", 900000, "Personal expenditure previously deducted, added back"], [], ["Detection triggers"], ["•  Invoices or receipts made out to the individual director personally, not the company"], ["•  Expenditure has no discernible connection to the company's trade (school fees, private-residence renovation)"], ["•  Expense timing coincides with personal events — school terms, family occasions"], ["•  No business purpose, approval trail, or board minutes for a large \"repairs\" or \"travel\" item"], [], ["Consequence"], ["The expenditure is disallowed and added back to chargeable income, with CIT reassessed accordingly. The amount is also treated as a benefit to the director — assessed to dividend withholding tax (8%) where the director is a shareholder, or added to employment income and subjected to PAYE where the director is also an employee."]], "Banking": [["BANKING & FINANCIAL INSTITUTIONS"], ["Banks, non-bank financial institutions, insurers, SDIs, e-money issuers"], [], ["Tax / Compliance Area", "Legal Basis", "Standard Treatment", "Common Accountant Error", "Auditor's Corrective / Reclassification View"], ["Corporate income tax", "Act 896", "25% standard rate on chargeable income.", "General — confirm chargeable income base is correctly stated.", "Verifies the 25% rate is applied to the correct audited chargeable income, not a management-accounts figure."], ["Growth and Sustainability Levy", "GSL Act 1095, as amended by Acts 1131 and 1166", "GSL Category A: 5% of profit before tax.", "GSL computed on profit after tax, or omitted from the return entirely.", "Recomputes GSL on audited profit before tax and assesses the shortfall plus penalty and interest."], ["WHT on interest paid to depositors", "Act 896 withholding schedule", "8% final withholding tax on interest paid to a resident individual.", "Bank fails to withhold on time-deposit or fixed-deposit interest credited to individual customers.", "Assesses the bank in its capacity as withholding agent for the tax that should have been deducted at source."], ["Staff loan benefit-in-kind", "Act 896 Fourth Schedule, loan benefit rules", "No benefit is assessed if the loan tenor is 12 months or less and the balance does not exceed three months' basic salary; otherwise the benefit is a quarter of (BOG rediscount rate less interest actually paid).", "Long-tenor concessionary staff loans (mortgage, vehicle) are treated as benefit-free because the short-tenor exemption is applied without checking the conditions.", "Recomputes the imputed interest benefit using the Bank of Ghana rediscount rate and backdates the PAYE assessment."], ["VAT on financial services", "VAT Act 1151 and VAT exemption schedule", "Core lending and deposit-taking services are exempt; fee- and commission-based services (advisory, account maintenance, card fees) may be standard-rated.", "All income, including fee and commission lines, is treated as exempt because \"we are a bank.\"", "Segregates exempt interest/margin income from taxable fee income and assesses output VAT on the latter."], ["WHT on dividends", "Act 896 withholding schedule", "8% final withholding tax; exempt where the recipient company holds 25% or more of the voting power directly or indirectly.", "The 25%-ownership exemption is applied without verifying the shareholding percentage at the date of payment.", "Disallows the exemption where the threshold is not evidenced and assesses the withholding tax."], [], ["Worked example — Growth and Sustainability Levy (Category A)"], ["Line", "Amount / Rate", "Basis"], ["Profit before tax for the year (GH¢)", 50000000, "Input — audited financial statements"], ["GSL rate — Category A", 0.05, "Input — GSL Act, Category A institutions"], ["GSL payable", 2500000, "Profit before tax x GSL rate"], [], [], ["Scheme illustration — General loan-loss provision claimed as a tax deduction"], ["A bank recognises a GH¢15,000,000 IFRS 9 expected-credit-loss provision covering its whole performing loan portfolio (Stage 1/2) and deducts the full amount in its tax computation. Act 896 only allows a deduction for specifically identified, individually assessed bad debts meeting the statutory write-off conditions — not a portfolio-wide provision."], ["Line", "As Reported", "Auditor's Reconstruction", "Note"], ["IFRS 9 provision claimed as a tax deduction", -15000000, "", "Full IFRS charge deducted as reported"], ["Specifically identified, individually assessed write-offs", "", -4000000, "The only portion that meets the statutory bad-debt deduction conditions"], ["Disallowed general/portfolio provision — added back", "", 11000000, "Amount deducted less the specifically identified portion"], [], ["Detection triggers"], ["•  The deduction is computed straight from the IFRS 9 ECL model output rather than a loan-by-loan write-off schedule"], ["•  No individual customer default or recovery assessment on file for the disallowed portion"], ["•  The provision balance moves with macro assumptions (GDP, PD/LGD models) rather than actual default events"], ["•  No reconciliation schedule bridging the IFRS charge to the tax-deductible specific write-offs"], [], ["Consequence"], ["The disallowed general provision is added back to chargeable income and CIT is reassessed on the higher base, plus interest and penalty for the understatement. Going forward, the bank is required to maintain a bad-debt write-off schedule reconciling the IFRS ECL charge to what actually qualifies as a specific, deductible write-off."]], "Telecoms": [["TELECOMMUNICATIONS"], ["Telecom network operators and electronic communication service providers"], [], ["Tax / Compliance Area", "Legal Basis", "Standard Treatment", "Common Accountant Error", "Auditor's Corrective / Reclassification View"], ["Corporate income tax", "Act 896", "25% standard rate.", "General.", "Confirms the rate is applied to the correct chargeable income."], ["Growth and Sustainability Levy", "GSL Act 1095, as amended", "GSL Category A: 5% of profit before tax (telecom companies liable to collect CST fall in Category A).", "GSL omitted, or computed on the wrong profit base.", "Recomputes on audited PBT and assesses any shortfall."], ["Communications Service Tax (CST)", "Communications Service Tax Act, as amended", "5% levied on the charge for electronic communication services, collected from the consumer and remitted monthly.", "CST computed inconsistently on bundled voice/data packages, or promotional/free airtime excluded from the CST base without basis.", "Recomputes CST on the full consideration charged to the consumer for the service and assesses under-remittance plus penalty."], ["WHT on tower/site lease payments", "Act 896 withholding schedule (rent vs service)", "Rent payments to a non-individual carry withholding tax; the correct rate depends on whether the arrangement is genuinely a lease of property or a bundled infrastructure service.", "Tower lease and managed-service payments are withheld at a single rate without examining what the contract actually delivers.", "Examines the contract's substance and reclassifies the withholding rate to match rent vs service treatment."], ["WHT on non-resident interconnect/roaming settlements", "Act 896 withholding schedule", "20% withholding tax on payments to a non-resident for services connected with a communications business.", "Cross-border interconnect and roaming settlements are paid with no withholding, often netted through an intercompany account.", "Assesses withholding tax and penalty on unremitted cross-border settlement payments."], ["VAT on airtime and data bundles", "VAT Act 1151", "Standard-rated (20% combined VAT/NHIL/GETFund) on the consideration charged.", "Free or promotional airtime/data is excluded from the VAT base without an approved basis for the adjustment.", "Verifies the VAT base includes the correct consideration for all chargeable supplies, promotional or not."], [], ["Worked example — Communications Service Tax"], ["Line", "Amount / Rate", "Basis"], ["Total consumer charges for the month (GH¢)", 1000000, "Input — billing system output"], ["CST rate", 0.05, "Input — Communications Service Tax Act"], ["CST payable for the month", 50000, "Consumer charges x CST rate"], [], [], ["Scheme illustration — Bundled device-and-airtime plan priced to shift value out of the CST/VAT base"], ["A telco sells a bundled 24-month plan (smartphone plus data/voice) for GH¢6,000. It allocates GH¢4,500 to \"device financing\" (outside the Communications Service Tax base) and only GH¢1,500 to the communication service. Stand-alone prices for the same components are GH¢2,000 (device) and GH¢5,500 (24-month plan) — implying the bundle should split roughly 27% device / 73% service."], ["Line", "As Reported", "Auditor's Reconstruction", "Note"], ["Device component of the bundle", 4500, 1600, "Reconstructed pro-rata to stand-alone selling prices (2,000 / 7,500 of the combined value)"], ["Communication service component (CST/VAT base)", 1500, 4400, "Reconstructed pro-rata to stand-alone selling prices (5,500 / 7,500 of the combined value)"], ["CST understatement per bundle (5%)", "", 145, "Reconstructed service value less reported service value, x CST rate — multiply by bundle volume for total exposure"], [], ["Detection triggers"], ["•  The allocation between device and service does not match the components' relative stand-alone selling prices"], ["•  The allocation is skewed every year toward whichever component carries the lower tax rate"], ["•  \"Device financing\" carries no separate financing agreement, interest schedule, or credit assessment"], ["•  The same components sold unbundled are priced inconsistently with the bundle allocation"], [], ["Consequence"], ["CST and VAT are reassessed on the reallocated service component across the volume of bundles sold in the period, plus penalty and interest. GRA typically then requires a standalone-selling-price-based allocation methodology going forward for all bundled offers."]], "Services-Consulting": [["SERVICES & CONSULTING"], ["Professional services, advisory and consulting firms"], [], ["Tax / Compliance Area", "Legal Basis", "Standard Treatment", "Common Accountant Error", "Auditor's Corrective / Reclassification View"], ["Corporate income tax", "Act 896", "25% standard rate on chargeable income.", "General.", "Confirms the rate applied and the chargeable income base."], ["WHT on service fees received", "Act 896 withholding schedule", "7.5% on account, deducted by the client and remitted to GRA.", "The firm does not reconcile WHT certificates received from clients against the credit claimed in its own tax return, or claims credit with no certificate on file.", "Disallows any WHT credit claimed without a supporting certificate and assesses the resulting shortfall."], ["Employee vs consultant status (within the firm)", "Substance-over-form test", "Genuine self-employed associates control their own work, serve other clients, and invoice for defined deliverables.", "Junior staff or long-term associates are engaged and paid as \"consultants\" against invoices to avoid payroll taxes, while working exclusively for the firm under its supervision.", "Reclassifies the individuals as employees and assesses PAYE and SSNIT arrears from the date the employment relationship in substance began."], ["VAT registration threshold", "VAT Act 1151", "Registration is mandatory once the statutory annual taxable-supply threshold is exceeded (confirm the current threshold before advising).", "A sole-practitioner consultant continues to invoice without VAT registration after turnover has exceeded the threshold.", "Assesses VAT retrospectively from the date the threshold was breached, plus registration penalties."], ["Disbursements vs fee income", "Act 896 general principle", "A genuine pass-through disbursement made on a client's behalf (e.g. statutory filing fees paid at cost) is not the firm's income.", "Client disbursements are netted against WHT-bearing fee income without invoices or evidence that the amount was a true pass-through at cost.", "Requires supporting evidence for every disbursement claimed; unsupported amounts are treated as taxable fee income."], ["Cross-border consulting fees to non-residents", "Act 896 withholding schedule", "20% withholding tax on management and technical service fees paid to a non-resident, where the service has a Ghana source.", "Fees paid to an offshore consultant are not withheld because \"the work was performed abroad,\" without considering where the service is used or who benefits from it.", "Tests the Ghana-source question against use/benefit in Ghana rather than physical location of performance, and reassesses withholding tax accordingly."], [], ["Worked example — withholding tax on a service invoice"], ["Line", "Amount / Rate", "Basis"], ["Invoice value for services rendered (GH¢)", 50000, "Input — client invoice"], ["WHT rate — services (resident, on account)", 0.075, "Input — Act 896 withholding schedule"], ["WHT to be deducted by the client", 3750, "Invoice value x WHT rate"], ["Net amount paid to the firm", 46250, "Invoice value less WHT deducted"], [], [], ["Scheme illustration — Splitting a single engagement into invoices below the WHT de minimis threshold"], ["A client owes a consulting firm GH¢18,000 for one project. Instead of a single invoice, the engagement is billed as 10 separate invoices of GH¢1,800 each, each falling under the GH¢2,000 threshold below which contract payments are exempt from withholding tax."], ["Line", "As Reported", "Auditor's Reconstruction", "Note"], ["Value of the single underlying engagement", 18000, 18000, "Not in dispute — one scope of work, one engagement letter"], ["WHT withheld as reported (10 invoices, each below GH¢2,000)", 0, "", "Each individual invoice falls under the exemption threshold"], ["WHT that should apply on the aggregated contract (7.5%)", "", 1350, "Aggregated contract value x the services WHT rate"], [], ["Detection triggers"], ["•  Multiple same-day or same-week invoices from the same vendor to the same client, each just under the threshold"], ["•  Sequential invoice numbering or a shared engagement letter indicating one underlying scope of work"], ["•  All \"separate\" payments settle into the same bank account"], ["•  No independent commercial rationale for splitting one deliverable into multiple invoices"], [], ["Consequence"], ["GRA aggregates the split invoices into the true single contract, assesses the withholding tax that should have applied, and adds penalty for the avoidance structuring. The paying client can be held jointly liable for the unremitted withholding tax as the party responsible for deducting it."]], "Trading": [["TRADING — BUYING AND SELLING GOODS"], ["Retail, wholesale and import/export trading of physical goods"], [], ["Tax / Compliance Area", "Legal Basis", "Standard Treatment", "Common Accountant Error", "Auditor's Corrective / Reclassification View"], ["Corporate income tax / minimum chargeable income", "Act 896", "25% standard rate; a trader declaring losses for five consecutive years of assessment may be assessed on a minimum chargeable income of 5% of turnover (farming and businesses within their first five years are excluded).", "A perpetually loss-making trader is never tested against the minimum-tax rule despite years of continuous losses.", "Applies the 5% of turnover minimum-tax test once five consecutive loss years are confirmed."], ["VAT — flat rate vs standard rating", "VAT Act 1151", "Retailers with taxable supplies between GH¢200,000 and GH¢500,000 may elect a 3% flat rate on taxable supplies instead of standard VAT (20% combined).", "A retailer whose taxable supplies have grown beyond GH¢500,000 continues to apply the 3% flat rate.", "Reclassifies the retailer to standard VAT rating from the point the threshold was exceeded and assesses the VAT shortfall."], ["WHT on supply of goods", "Act 896 withholding schedule", "3% withholding tax on contract payments for the supply of goods exceeding GH¢2,000, except where both the vendor and purchaser deal in those goods as trading stock.", "WHT is not withheld on a goods purchase on the basis that it is a \"trading stock to trading stock\" sale, without verifying that both parties actually trade in that stock.", "Verifies both parties' trading activity before accepting the exemption; assesses WHT where the condition is not evidenced."], ["Cost of sales / stock reconciliation", "General audit test", "Cost of sales should reconcile to opening stock plus purchases less closing stock, supported by purchase invoices and a physical count.", "Cost of sales is inflated with unsupported purchase entries to reduce taxable profit.", "Reconciles the stock movement against supplier invoices and a physical stock count, and disallows unsupported cost of sales."], ["Import declarations vs domestic sales", "Cross-agency data matching (GRA Customs vs Domestic Tax)", "Import values declared at customs should be consistent with the goods later recorded in stock and sold domestically.", "Import values are understated at the point of customs entry, while the same goods are later sold at full market value with no reconciliation.", "Cross-matches customs import records against domestic sales and VAT returns, and assesses under-declared value."], [], ["Worked example — VAT flat rate vs standard rating on a GH¢300,000 retailer"], ["Line", "Amount / Rate", "Basis"], ["Annual taxable supplies (GH¢)", 300000, "Input — turnover within the GH¢200,000–500,000 flat-rate band"], ["Flat VAT rate for qualifying retailers", 0.03, "Input — VAT Act 1151, retailer flat rate"], ["VAT payable under the flat rate", 9000, "Taxable supplies x flat rate"], ["Standard combined VAT/NHIL/GETFund rate (for comparison)", 0.2, "Input — standard rate from 1 Jan 2026"], ["VAT that would apply under standard rating", 60000, "Taxable supplies x standard rate — shown for comparison only; flat-rate traders do not also pay this"], [], [], ["Scheme illustration — Customs undervaluation inconsistent with the cost recorded in the trader's own books"], ["A trader imports 10,000 units and declares a customs value of GH¢50/unit (GH¢500,000), reducing import duty and VAT paid at the border. In its own accounting records, however, the same goods are recorded at their true purchase cost of GH¢90/unit (GH¢900,000) — the figure that keeps its margin and financing position realistic."], ["Line", "As Reported", "Auditor's Reconstruction", "Note"], ["Import value declared to Customs", 500000, "", "Duty and import VAT paid on this base"], ["Purchase cost recorded in the trader's own accounts for the same shipment", "", 900000, "The figure GRA Domestic Tax sees in cost of sales — for the identical goods"], ["Undervaluation at the border", "", 400000, "Book cost less declared customs value — the two should reconcile, allowing only for freight, insurance and other landed costs"], ["Additional duty/VAT exposure at the border (illustrative combined rate 30%)", "", 120000], ["Detection triggers"], ["•  GRA Customs' declared value is materially lower than GRA Domestic Tax's own recorded purchase cost for the same shipment"], ["•  No reconciliation schedule bridging the customs value to the accounting cost (freight, insurance and other landed costs rarely explain a near-doubling)"], ["•  Supplier invoices on file for domestic tax purposes differ from the invoice submitted at the border"], ["•  The product is declared under a different, lower-duty HS code than its true classification"], [], ["Consequence"], ["Import duty and VAT are reassessed on the undervaluation at the border, plus penalty and interest. The inconsistency between the two GRA divisions' own records is treated as a strong indicator of deliberate misstatement, triggering a full reconciliation of purchases to import records across the audit period."]], "Manufacturing": [["MANUFACTURING"], ["Manufacturing, agro-processing and Free Zone enterprises"], [], ["Tax / Compliance Area", "Legal Basis", "Standard Treatment", "Common Accountant Error", "Auditor's Corrective / Reclassification View"], ["Corporate income tax / location incentives", "Act 896; KPMG/GRA incentive schedule", "25% standard rate; a 25% or 50% tax rebate applies to manufacturers located in regional capitals (other than Accra/Tema) or elsewhere respectively; Free Zone enterprises enjoy 0% on export income for the first 10 years.", "A rebate is claimed for a factory nominally registered outside Accra/Tema, but actual production takes place at an Accra site.", "Verifies the actual production location (site visit, utility bills, employee records) before allowing the rebate."], ["Capital allowances", "Act 896, Fourth Schedule asset classes", "Assets are depreciated per statutory class (e.g. Class 2 plant and machinery at 30% reducing balance); each class has its own rate and method.", "Machinery is placed in the wrong class — for example, filed under the slower Class 5 (1/useful life) instead of the correct Class 2 (30%).", "Reviews the fixed asset register against the statutory class definitions and recomputes allowances at the correct rate."], ["Free Zone domestic sales limit", "Free Zones legislation and location-incentive conditions", "A Free Zone enterprise's tax exemption is tied to exporting outside the national customs territory; domestic-market sales are taxed at the standard rate after the concessionary period.", "A Free Zone enterprise sells beyond its permitted domestic threshold without paying tax on the domestic-market portion.", "Tests the export-to-domestic sales ratio and assesses tax on the domestic portion at the applicable rate."], ["Additional deduction for fresh graduates", "Act 896 incentive provisions", "An additional deduction of 10%, 30% or 50% of salaries is available depending on the proportion of fresh graduates in the workforce.", "The headcount used to claim the deduction includes graduates hired more than 12 months earlier, who no longer qualify as \"fresh.\"", "Verifies graduation date and hire date for each employee claimed and disallows the deduction where the qualifying period has lapsed."], ["VAT zero-rating on exports", "VAT Act 1151", "Exports are zero-rated, provided the export is evidenced.", "Zero-rating is claimed on sales described as exports with no shipping documentation, bill of lading, or customs export entry on file.", "Disallows zero-rating without export documentation and assesses standard VAT on the sale."], [], ["Worked example — capital allowance, Class 2 plant and machinery"], ["Line", "Amount / Rate", "Basis"], ["Cost of qualifying plant and machinery (GH¢)", 500000, "Input — fixed asset register"], ["Capital allowance rate — Class 2 (reducing balance)", 0.3, "Input — Act 896, Fourth Schedule, Class 2"], ["Capital allowance — Year 1", 150000, "Cost x rate"], ["Written-down value — end of Year 1", 350000, "Cost less Year 1 allowance"], ["Capital allowance — Year 2", 105000, "Written-down value x rate (reducing balance)"], [], [], ["Scheme illustration — Inflated related-party equipment invoice used to overstate capital allowances"], ["A manufacturer imports machinery from a related offshore equipment supplier invoiced at GH¢3,500,000. Independent market quotations for equivalent equipment from unrelated suppliers put its fair value at GH¢2,000,000."], ["Line", "As Reported", "Auditor's Reconstruction", "Note"], ["Cost basis claimed", 3500000, 2000000, "Reconstructed to the independently quoted fair market value"], ["Year 1 capital allowance (Class 2, 30%)", 1050000, 600000, "Cost basis x 30%, reported vs reconstructed"], ["Disallowed excess allowance", "", 450000, "Allowance claimed less allowance allowable on the fair-value cost basis"], [], ["Detection triggers"], ["•  The equipment supplier is a related party — shared ownership or directors with the buyer"], ["•  Invoice price is above comparable market quotations or import data for similar equipment from unrelated suppliers"], ["•  No independent valuation or competitive quotation process for a large capital purchase"], ["•  Payment terms are inconsistent with arm's-length equipment financing (e.g. unusually long deferral suggesting the excess is a disguised cash transfer)"], [], ["Consequence"], ["The capital allowance is restricted to the arm's-length/fair-value cost basis, and the disallowed excess is added back to chargeable income for the year(s) claimed. Transfer pricing documentation is requested, and the same inflated invoice is typically flagged for a customs valuation reassessment as well."]], "Hospitality": [["HOSPITALITY — HOTELS"], ["Hotels and short-stay accommodation providers"], [], ["Tax / Compliance Area", "Legal Basis", "Standard Treatment", "Common Accountant Error", "Auditor's Corrective / Reclassification View"], ["Corporate income tax", "Act 896 / GSL sector rate schedule", "22% distinct sector rate for the hotel industry (vs the general 25%).", "The general 25% rate is applied, or hotel and non-hotel income streams are combined under one rate without separation.", "Verifies that only genuine hotel-operation income is taxed at 22%, and any unrelated income is separately identified and taxed at the correct rate."], ["VAT on room revenue", "VAT Act 1151 and VAT exemption schedule", "Hotel accommodation is standard-rated; the general VAT relief for granting/assigning an interest in land or buildings for dwelling purposes explicitly excludes hotel accommodation.", "Long-stay guests are treated as \"residential lets\" and the room revenue is claimed exempt.", "Disallows the exemption — hotel accommodation is excluded from the land/building relief regardless of length of stay — and assesses VAT."], ["VAT on food & beverage vs room revenue", "VAT Act 1151", "Each revenue stream is taxed according to its own VAT treatment; bundling does not change the underlying liability.", "Service charge and F&B revenue are bundled into a single \"room rate\" figure that obscures the correct VAT base for each stream.", "Unbundles the revenue streams and assesses VAT on each according to its own treatment."], ["WHT on travel agent / OTA commissions", "Act 896 withholding schedule", "10% withholding tax on commission paid to a sales/booking agent.", "Commission paid to travel agents or online booking platforms is settled net with no withholding.", "Assesses withholding tax on the commission paid, grossed up where necessary."], ["Casual and seasonal staff", "Act 896 general employment definition", "Where an employment relationship exists in substance (fixed hours, supervision, recurring engagement), PAYE applies regardless of the \"casual\" label.", "Seasonal banquet and event staff are treated as wholly outside PAYE as \"casual labour\" year after year.", "Applies PAYE where the relationship is in substance recurring employment, and assesses arrears."], [], ["Worked example — VAT on hotel room revenue"], ["Line", "Amount / Rate", "Basis"], ["Room revenue for the month (GH¢)", 400000, "Input — front-office system report"], ["Standard combined VAT/NHIL/GETFund rate", 0.2, "Input — standard rate from 1 Jan 2026"], ["VAT payable on room revenue", 80000, "Room revenue x standard rate — hotel accommodation does not qualify for the land/building exemption"], [], [], ["Scheme illustration — Unrecorded cash walk-in room revenue"], ["The hotel's front-desk property management system (PMS) shows 3,000 room-nights sold at an average GH¢800/night. Only 2,300 room-nights (GH¢1,840,000) are declared for VAT and CIT — 700 room-nights were paid in cash and never entered into the PMS or declared."], ["Line", "As Reported", "Auditor's Reconstruction", "Note"], ["Room-nights — PMS records", 3000, "", "Independent occupancy data from the booking/front-desk system"], ["Room-nights — declared for tax", 2300, "", "The figure used in the VAT and CIT returns"], ["Average daily rate (GH¢)", 800], ["Suppressed revenue", "", 560000, "(PMS room-nights less declared room-nights) x average daily rate"], [], ["Detection triggers"], ["•  Occupancy reported to GRA/the tourism regulator differs from PMS or booking-platform occupancy data"], ["•  Cash deposits to the bank do not match declared cash-sale volumes"], ["•  Food & beverage stock usage (covers served, bottles opened) implies more guests than declared room-nights support"], ["•  Reported room revenue is inconsistent with utility and laundry consumption benchmarks for the declared occupancy level"], [], ["Consequence"], ["Turnover is reconstructed using occupancy-based indirect methods — PMS records, and utility/laundry consumption benchmarking. VAT and CIT are reassessed on the suppressed revenue, plus penalty and interest, and the hotel is often placed under enhanced monitoring (e.g. electronic fiscal device requirements) going forward."]], "Media": [["MEDIA & ADVERTISING"], ["Broadcast, print, digital media and advertising agencies"], [], ["Tax / Compliance Area", "Legal Basis", "Standard Treatment", "Common Accountant Error", "Auditor's Corrective / Reclassification View"], ["Corporate income tax", "Act 896", "25% standard rate.", "General.", "Confirms the rate applied to correct chargeable income."], ["WHT on freelance presenters, actors, endorsements", "Act 896 withholding schedule", "7.5% withholding tax on endorsement fees and on other services provided by an individual.", "Freelancers and presenters are paid gross as \"one-off\" arrangements with no withholding, regardless of frequency.", "Assesses withholding tax on all such payments — frequency does not exempt them — plus penalty for non-remittance."], ["WHT on non-resident content / licensing fees", "Act 896 withholding schedule", "20% withholding tax on royalty, licensing or service payments to a non-resident.", "Payments to a foreign content owner or production house are misclassified as a \"reimbursement\" to avoid withholding.", "Recharacterises the payment as a royalty or service fee and assesses the 20% withholding tax."], ["VAT on advertising revenue, including barter", "VAT Act 1151", "Standard-rated on the full consideration, including the market value of any barter/trade exchange (e.g. goods for airtime).", "Barter advertising arrangements are excluded from the VAT base entirely because no cash changed hands.", "Values the barter transaction at open-market value and assesses VAT on that value."], ["WHT on agency commission", "Act 896 withholding schedule", "10% withholding tax on commission paid to a sales/canvassing agent.", "Advertising agency commission is netted off gross media billing with no withholding applied.", "Assesses withholding tax on the gross commission amount."], [], ["Worked example — WHT on a freelance presenter's fee"], ["Line", "Amount / Rate", "Basis"], ["Fee paid to a freelance presenter (GH¢)", 5000, "Input — talent/production invoice"], ["WHT rate — services provided by an individual", 0.075, "Input — Act 896 withholding schedule"], ["WHT to be withheld", 375, "Fee x WHT rate"], ["Net amount payable to the presenter", 4625, "Fee less WHT withheld"], [], [], ["Scheme illustration — Barter advertising excluded from revenue and the VAT base"], ["A media house provides GH¢400,000 of airtime (at its normal commercial rate) to a car dealership in exchange for two vehicles for executive use. No cash changes hands, and the transaction is never recorded as revenue."], ["Line", "As Reported", "Auditor's Reconstruction", "Note"], ["Advertising revenue recognised for the barter deal", 0, "", "Nothing recorded — no cash changed hands"], ["Market value of the airtime provided", "", 400000, "The deemed consideration for the supply, valued at the media house's normal commercial rate"], ["VAT payable on the deemed supply (20%)", "", 80000, "Market value of airtime x standard combined VAT/NHIL/GETFund rate"], [], ["Detection triggers"], ["•  Vehicles or other assets appear in the fixed asset register with no corresponding cash outflow or loan"], ["•  The counterparty's own records show an advertising campaign with the media house but no cash payment"], ["•  No invoice was ever raised for the airtime given"], ["•  The vehicles received cannot be matched to any recorded purchase transaction"], [], ["Consequence"], ["VAT is assessed on the deemed supply at open-market value, and the same value is also brought into income for CIT purposes as advertising revenue (with a corresponding fixed-asset addition) — so both VAT and CIT exposure arise from the one transaction. Once found, all barter arrangements in the period are typically re-examined."]], "Education": [["SCHOOLS & EDUCATION"], ["Private schools and privately-owned universities"], [], ["Tax / Compliance Area", "Legal Basis", "Standard Treatment", "Common Accountant Error", "Auditor's Corrective / Reclassification View"], ["Corporate income tax", "Act 896 exemption provisions", "A privately-owned university is exempt from tax where it ploughs back 100% of after-tax profit into the institution; otherwise the standard 25% rate applies.", "The exemption is claimed without an annual test confirming that 100% of profit was actually reinvested.", "Tests the ploughback condition for the specific year under audit; disallows the exemption for any year it is not met."], ["VAT — tuition vs ancillary income", "VAT Act 1151 and relief/exempt supply schedule", "Core educational (tuition) services are a relief/exempt supply; ancillary commercial activity — bookshop, hostel, catering — is generally taxable.", "The entire institution, including bookshop, hostel and catering revenue, is treated as exempt because the core activity is education.", "Segregates exempt tuition income from taxable ancillary income and assesses VAT on the latter."], ["Disguised profit distribution", "Act 896 related-party rules", "The 100%-ploughback exemption requires profit to remain in the institution, not be extracted through related-party arrangements.", "\"Management fees\" or \"consultancy fees\" are paid to individuals or companies connected to the founders, effectively extracting profit while the ploughback exemption is still claimed.", "Examines related-party payments for disguised profit distribution and disallows the exemption where found."], ["WHT on part-time lecturers / examiners", "Act 896 withholding schedule", "10% final withholding tax on fees paid to an individual for part-time teaching, lecturing, invigilating or examining.", "Part-time lecturers are treated inconsistently — sometimes run through PAYE, sometimes paid gross — with no documented policy.", "Tests each engagement against its correct classification (employment vs the 10% final withholding category) and assesses any shortfall."], ["Boarding and feeding fees", "VAT Act 1151", "Boarding/accommodation and feeding charges are not automatically covered by the education relief and should be assessed on their own VAT treatment.", "Boarding and feeding fees are bundled into \"tuition\" to bring them under the same exempt treatment.", "Unbundles boarding and feeding charges from tuition and assesses VAT as appropriate to each."], [], ["Worked example — annual ploughback test"], ["Line", "Amount / Rate", "Basis"], ["Profit after tax for the year (GH¢)", 1000000, "Input — audited financial statements"], ["Amount reinvested in the institution during the year (GH¢)", 850000, "Input — capital expenditure and retained-fund records"], ["Ploughback percentage achieved", 0.85, "Amount reinvested / profit after tax — must equal 100% for the exemption to hold for the year"], ["Shortfall against the 100% requirement (GH¢)", 150000, "Profit after tax less amount reinvested; a shortfall here puts the exemption at risk for the year"], [], [], ["Scheme illustration — Mandatory \"development levy\" disguised as an exempt donation"], ["A school charges every parent a compulsory GH¢3,000/term \"development levy\" alongside tuition, which in substance covers boarding, feeding and facilities. It is labelled and receipted as a \"voluntary donation\" to avoid VAT and to inflate the exempt grants/donations line."], ["Line", "As Reported", "Auditor's Reconstruction", "Note"], ["Development levy classified as an exempt donation", 3000000, "", "Aggregate for the year, reported as exempt"], ["VAT payable once reclassified as a taxable ancillary fee (20%)", "", 600000, "Levy amount x standard combined VAT/NHIL/GETFund rate"], [], ["Detection triggers"], ["•  The \"donation\" is mandatory for enrolment or continued attendance — not voluntary"], ["•  The amount is uniform across all students rather than varying by donor capacity"], ["•  No donor acknowledgment or receipt process typical of genuine philanthropic giving"], ["•  The levy directly funds boarding, feeding, or facility costs rather than being pooled into general institutional development"], [], ["Consequence"], ["The levy is reclassified as a taxable ancillary supply and VAT is assessed on the full amount, plus penalty and interest. Where material, it can also affect the 100%-ploughback exemption test, since the \"donation\" was in substance disguised ancillary trading income rather than a true gift."]], "NGO": [["NGO / NOT-FOR-PROFIT"], ["Non-governmental and charitable organisations"], [], ["Tax / Compliance Area", "Legal Basis", "Standard Treatment", "Common Accountant Error", "Auditor's Corrective / Reclassification View"], ["Income tax on grants and donations", "Act 896, s.97/s.100", "Grants and donations applied to the organisation's exempt charitable purpose are exempt from income tax; trading or commercial income is taxable.", "All receipts, including fee-for-service income (training, consulting, merchandise), are treated as exempt because the organisation is a registered NGO.", "Identifies commercial/trading activity separately from grant income and assesses tax on the former."], ["VAT registration", "VAT Act 1151", "There is no automatic VAT exemption for NGOs; registration and VAT apply once the organisation undertakes taxable activity above the registration threshold.", "The organisation assumes blanket VAT exemption for all activities, including training-for-fee or paid consulting services.", "Identifies fee-for-service activities, tests them against the registration threshold, and assesses VAT plus registration penalties where breached."], ["PAYE and SSNIT", "Act 896; SSNIT Act", "An NGO is an employer like any other — PAYE and SSNIT obligations apply in full regardless of non-profit status.", "The organisation believes non-profit status exempts it from payroll tax obligations, or under-remits because \"we don't make profit.\"", "Assesses full PAYE and SSNIT arrears — this is one of the most common and material findings in NGO audits."], ["WHT on contractor and consultant payments", "Act 896 withholding schedule", "Standard withholding rates apply regardless of the source of funds — 7.5% services, 20% management/technical fees, 3% goods, 5% works.", "Grant-funded project payments to consultants or vendors are made gross because the funds are \"donor money,\" not the NGO's own revenue.", "Confirms that WHT obligations attach to the payment, not the funding source, and assesses arrears."], ["Grant-use nexus", "Act 896, s.97/s.100", "The income tax exemption applies only to the extent grant funds are actually applied to the exempt charitable purpose.", "Grant income is partly used to cross-subsidise a for-profit or unrelated activity, while the full amount is still reported as exempt.", "Traces fund utilisation against the exempt purpose and taxes the portion not applied to it."], [], ["Worked example — WHT on a consultant paid from grant funds"], ["Line", "Amount / Rate", "Basis"], ["Consultant fee funded from a donor grant (GH¢)", 20000, "Input — project consultant invoice"], ["WHT rate — services (resident, on account)", 0.075, "Input — Act 896 withholding schedule"], ["WHT to be withheld and remitted", 1500, "Fee x WHT rate — applies regardless of the source of funds"], ["Net amount payable to the consultant", 18500, "Fee less WHT withheld"], [], [], ["Scheme illustration — Founder-connected \"consultant\" diverting grant funds"], ["NGO Hope for Ghana receives a GH¢2,000,000 grant for a skills-training project. It pays a \"programme consultant\" fee of GH¢900,000 to a company owned by the Executive Director's spouse, with no competitive procurement and no deliverables register."], ["Line", "As Reported", "Auditor's Reconstruction", "Note"], ["Grant income", 2000000, 2000000, "Not in dispute"], ["Consultant fee to the ED's spouse's company", -900000, -150000, "Reconstructed at the benchmarked fair value for comparable capacity-building services"], ["Genuine project costs", -900000, -900000, "Not in dispute"], ["Amount applied to the exempt charitable purpose", 200000, 950000, "The reconstructed figure is what actually qualifies for the income tax exemption"], [], ["Detection triggers"], ["•  The recipient is a related party — a company owned by a spouse, relative, or close associate of a decision-maker"], ["•  No competitive procurement or tender process for a grant-funded engagement"], ["•  No deliverables register, timesheets, or output evidence for the \"consultancy\""], ["•  The fee is paid in a lump sum, often close to year-end, rather than against milestones"], ["•  The related-party relationship is not disclosed in the NGO's financial statements"], [], ["Consequence"], ["The exemption is denied on the diverted portion, which is taxed as ordinary income at 25% since it was not applied to the exempt purpose. GRA may also refer the matter to the NGO sector regulator or the grant donor for breach of grant terms, and PAYE/withholding tax exposure can arise if the \"consultant\" is in substance acting as an employee."]], "Mining": [["MINING"], ["Gold and other mineral mining operations"], [], ["Tax / Compliance Area", "Legal Basis", "Standard Treatment", "Common Accountant Error", "Auditor's Corrective / Reclassification View"], ["Corporate income tax", "Act 896", "35% rate on mineral and mining operations.", "General.", "Confirms the 35% rate is applied and correctly separated from any non-mining income."], ["Growth and Sustainability Levy", "GSL Act 1095, as amended by Acts 1131 and 1166", "Gold mining: GSL Category C, currently 3% of gross production (the rate has moved between 1% and 3% across recent amendments — confirm the rate in force for the period under review); other minerals and upstream oil & gas: GSL Category BA, 1% of gross production.", "The wrong period's GSL rate is applied because the rate has changed more than once in recent years.", "Confirms the GSL rate in force for the specific assessment period before accepting the computation."], ["Mineral royalties", "Minerals and Mining Act; Minerals and Mining (Royalties) Regulations, 2025", "Royalty is computed on gross revenue from the sale of minerals, at the rate prescribed in the mining lease or the applicable regulations.", "Royalty is computed on a net smelter return or after deducting processing/transport costs, instead of on gross sales revenue as defined.", "Recomputes the royalty on gross mineral sales revenue and assesses the shortfall."], ["WHT on unprocessed minerals", "Act 896 withholding schedule", "1.5% final withholding tax on payments for unprocessed precious minerals, subject to specific carve-outs (e.g. large-scale mining lease holders, gold purchases).", "A carve-out is applied to an operation that does not actually meet the licence-category or mineral-processing conditions for it.", "Verifies the licence category and processing status of the mineral before accepting the carve-out; assesses WHT where it does not apply."], ["Transfer pricing on related-party ore sales", "Act 896 transfer pricing rules", "Sales of ore or concentrate to a related party must be priced at arm's length.", "Ore or concentrate is sold to a related offshore trading or refining entity below market/benchmark price, shifting margin offshore.", "Benchmarks the sale price against comparable uncontrolled transactions or published market indices and adjusts taxable income accordingly."], ["Capital allowances on mining plant", "Act 896, Fourth Schedule", "Mining plant and equipment is depreciated at the statutory class rate applicable to the asset type.", "Mining equipment is placed in a slower depreciation class than its correct statutory classification.", "Verifies the fixed asset register against the correct class and recomputes allowances."], [], ["Worked example — mineral royalty computation"], ["Line", "Amount / Rate", "Basis"], ["Gross revenue from mineral sales for the period (GH¢)", 10000000, "Input — mine production and sales records"], ["Royalty rate per the mining lease / applicable regulations", 0.05, "Input — confirm against the specific lease or regulation for the mineral concerned"], ["Royalty payable", 500000, "Gross revenue from mineral sales x royalty rate — not net smelter return"], [], [], ["Scheme illustration — Under-declared ore tonnage reduces the royalty base"], ["The mine's internal geological and metallurgical recovery records show 50,000 tonnes of ore extracted and sold in the year, worth GH¢10,000,000 at the reconstructed gross value. The royalty return filed declares only 42,000 tonnes (GH¢8,400,000), attributing the difference to unrecorded \"waste and losses\" inconsistent with the mine's own recovery data."], ["Line", "As Reported", "Auditor's Reconstruction", "Note"], ["Gross production value declared for royalty", 8400000, "", "As filed with GRA"], ["Gross production value per internal geological/export records", "", 10000000, "Reconstructed from the mine's own metallurgical recovery and shipping/export records"], ["Royalty rate", "5%"], ["Royalty shortfall", "", 80000, "(Reconstructed less declared gross production value) x royalty rate"], [], ["Detection triggers"], ["•  Mismatch between the mine's internal geological/metallurgical recovery reports and the volume declared for royalty purposes"], ["•  Export or shipping manifests and buyer contracts show higher tonnage than declared"], ["•  Minerals Commission production data does not reconcile with the GRA royalty filing"], ["•  An unusually high \"waste/loss\" percentage compared to industry norms for the same ore type and processing method"], [], ["Consequence"], ["Royalty is reassessed on the reconstructed gross production value, plus interest and penalty. Because royalty understatement is also a breach of the mining lease conditions, the matter is typically referred to the Minerals Commission for a licence-compliance review alongside the tax assessment."]], "Medical": [["MEDICAL — HOSPITALS & CLINICS"], ["Private hospitals, clinics and medical service providers"], [], ["Tax / Compliance Area", "Legal Basis", "Standard Treatment", "Common Accountant Error", "Auditor's Corrective / Reclassification View"], ["Corporate income tax", "Act 896", "25% standard rate, unless the entity is separately approved as a charitable/NGO institution.", "General.", "Confirms the entity's actual approval status before accepting any exemption claim."], ["VAT on medical services vs ancillary revenue", "VAT Act 1151 and VAT exemption schedule", "Medical services and essential drugs (Chapter 30 HS Code) are VAT-exempt; ancillary revenue (pharmacy retail, private-ward extras, parking, cafeteria) is not automatically covered.", "All hospital revenue, including pharmacy retail sales and private-ward extras, is treated as exempt medical income.", "Segregates exempt core medical services from taxable ancillary revenue lines and assesses VAT on the latter."], ["Input VAT apportionment", "VAT Act 1151, apportionment formula for mixed supplies", "Where an entity has both exempt and taxable outputs, input VAT credit is restricted to the taxable-supply proportion using the statutory apportionment formula.", "Full input VAT credit is claimed on all purchases despite a significant proportion of output being exempt medical services.", "Applies the statutory apportionment formula and disallows input VAT credit beyond the taxable-supply proportion."], ["WHT on visiting / locum consultants", "Act 896 withholding schedule", "7.5% withholding tax on services provided by an individual, unless the relationship is in substance an employment.", "Visiting or locum doctors are paid gross as \"professional fees\" with no withholding and no assessment of whether the relationship is really employment.", "Applies the 7.5% withholding tax, or reclassifies as employment (with PAYE/SSNIT consequences) where the substance test points that way."], ["Import relief on medical equipment/drugs", "Exemptions Act 2022 (Act 1083), as amended; Ministry of Health approval process", "Import relief is only available for equipment or drugs actually on the approved exemption list, with the required Ministry of Health approval.", "Relief is claimed on imported items based on general \"medical use\" without confirming the HS code and approval status.", "Verifies the HS code classification and Ministry approval before accepting the relief; assesses duty/VAT where not evidenced."], [], ["Worked example — input VAT apportionment"], ["Line", "Amount / Rate", "Basis"], ["Total input VAT for the period (GH¢)", 50000, "Input — purchase VAT records"], ["Taxable supplies as a proportion of total supplies", 0.3, "Input — computed from taxable vs exempt output for the period"], ["Input VAT creditable", 15000, "Total input VAT x taxable-supply proportion"], ["Input VAT to be disallowed / apportioned to exempt supplies", 35000, "Total input VAT less the creditable portion"], [], [], ["Scheme illustration — Cash consultations skimmed before entering the billing system"], ["The hospital's billing system records 8,000 private (self-pay) consultations for the year at an average fee of GH¢150. Appointment-diary and laboratory-dispensing volumes for the same period indicate closer to 11,000 consultations actually took place — the difference was paid in cash directly to front-desk/attending staff and never entered into the billing system."], ["Line", "As Reported", "Auditor's Reconstruction", "Note"], ["Consultations — billing system", 8000, "", "As declared for tax"], ["Consultations — appointment diary/lab-utilisation estimate", "", 11000, "Reconstructed from independent volume indicators"], ["Average consultation fee (GH¢)", 150], ["Suppressed revenue", "", 450000, "(Estimated consultations less billed consultations) x average fee"], [], ["Detection triggers"], ["•  The appointment diary or reception log shows more patient visits than billed consultations"], ["•  Laboratory/pharmacy dispensing volumes imply a higher patient count than the billing system supports"], ["•  Doctors' own private patient records reference patients with no matching billing entry"], ["•  Cash banking patterns are inconsistent with the declared cash-sale volume"], [], ["Consequence"], ["Revenue is reconstructed using patient-volume/consumption-based indirect methods, and CIT is reassessed on the suppressed profit (medical consultations are VAT-exempt, so the primary exposure is CIT, not VAT). Where the diverted cash was retained by individual staff rather than the hospital entity, this can also trigger a PAYE or benefit-in-kind assessment on those staff."]], "Pharmaceuticals": [["PHARMACEUTICALS"], ["Pharmaceutical manufacture and distribution"], [], ["Tax / Compliance Area", "Legal Basis", "Standard Treatment", "Common Accountant Error", "Auditor's Corrective / Reclassification View"], ["Corporate income tax / location incentives", "Act 896", "25% standard rate; manufacturing location incentives may apply where the entity is a genuine local manufacturer.", "General.", "Confirms whether the entity is genuinely manufacturing or merely distributing before accepting any manufacturing incentive claim."], ["VAT — product-line classification", "VAT Act 1151 and VAT exemption schedule", "Essential drugs and specified active ingredients under Chapter 30 of the HS Code are VAT-exempt; other product lines (cosmetics, supplements, medical devices) may be standard-rated.", "The entire product range is treated as VAT-exempt on the basis that \"we are a pharmacy/pharma company,\" without HS code-level classification of each product.", "Requires HS code classification at the individual product/SKU level and assesses VAT on lines that do not qualify as essential drugs."], ["Import relief on active pharmaceutical ingredients", "Exemptions Act 2022 (Act 1083), as amended", "Import relief applies to inputs used to manufacture products that are themselves classified as essential drugs in finished form.", "Relief is claimed on imported inputs where the finished product they go into is not actually an essential drug (e.g. a cosmetic or supplement line).", "Traces the input-to-finished-product mapping and disallows relief where the finished product does not qualify."], ["Manufacturing incentive eligibility", "Act 896 and location-incentive schedule", "Location rebates and manufacturing capital allowances are available to entities that actually manufacture, not to distributors.", "A distributor or repackager claims manufacturing incentives without an actual manufacturing licence or production process.", "Verifies the manufacturing licence and production activity before allowing the incentive."], ["WHT on distribution/sales agent commissions", "Act 896 withholding schedule", "10% withholding tax on commission paid to a sales or canvassing agent.", "Commissions paid to pharmacy sales representatives or distributors are settled without withholding.", "Assesses withholding tax on the commission paid."], [], ["Worked example — VAT treatment split across product lines"], ["Line", "Amount / Rate", "Basis"], ["Total sales for the period (GH¢)", 200000, "Input — sales ledger"], ["Sales of essential drugs — Chapter 30 HS Code (GH¢)", 150000, "Input — SKU-level classification, VAT-exempt"], ["Sales of other product lines (GH¢)", 50000, "Total sales less essential-drug sales — standard-rated"], ["Standard combined VAT/NHIL/GETFund rate", 0.2, "Input — standard rate from 1 Jan 2026"], ["VAT payable on the non-exempt product lines", 10000, "Other product-line sales x standard rate"], [], [], ["Scheme illustration — Vitamins/supplements reclassified under an exempt \"essential drug\" code"], ["A distributor sells GH¢3,000,000 of vitamin and supplement products annually. These are not covered by the Chapter 30 essential-drug VAT exemption, but the company invoices them under the same VAT-exempt code used for its genuine essential-drug lines."], ["Line", "As Reported", "Auditor's Reconstruction", "Note"], ["Supplement sales treated as VAT-exempt", 3000000, "", "As currently invoiced/reported"], ["VAT payable once correctly reclassified as standard-rated (20%)", "", 600000, "Supplement sales x standard combined VAT/NHIL/GETFund rate"], [], ["Detection triggers"], ["•  Product invoices/SKUs are described generically as \"pharma products\" rather than by their actual HS code or registration category"], ["•  Food and Drugs Authority registration shows the product registered as a \"supplement\" or \"cosmetic,\" not a \"drug\""], ["•  The exempt-sales ratio is unusually high relative to the company's actual essential-drug product mix"], ["•  No SKU-level VAT mapping schedule reconciling each product to its HS code classification"], [], ["Consequence"], ["VAT is reassessed on the reclassified non-exempt sales, plus penalty and interest. GRA typically obtains FDA registration records as independent corroboration, which makes this a well-evidenced adjustment once the product-level classification is checked."]]};
+
+/* =========================================================================
+   SECTOR AUDIT REFERENCE — generic renderer for the extracted workbook rows
+   ========================================================================= */
+const SECTOR_INDUSTRIES = ['Banking','Telecoms','Services-Consulting','Trading','Manufacturing',
+  'Hospitality','Media','Education','NGO','Mining','Medical','Pharmaceuticals'];
+const MAIN_HEAD = ['Tax / Compliance Area','Legal Basis','Standard Treatment','Common Accountant Error',"Auditor's Corrective / Reclassification View"];
+
+function populateIndustryDropdown(){
+  const grp = document.getElementById('sector-industry-group');
+  grp.innerHTML = SECTOR_INDUSTRIES.map(s=>`<option value="${s}">${s.replace('-', ' / ')}</option>`).join('');
+}
+
+function looksLikeHeading(text){
+  const t = String(text||'').trim();
+  return t.length>0 && t.length<95 && !t.endsWith('.') && !t.endsWith(',');
+}
+
+function renderSectorRows(rows){
+  let out = '';
+  let i = 0;
+  if(rows[0] && rows[0].length){ out += `<h2 class="sec-title">${escapeHtml(rows[0][0])}</h2>`; i=1; }
+  if(rows[1] && rows[1].length){ out += `<p class="sec-sub">${escapeHtml(rows[1][0])}</p>`; i=2; }
+
+  while(i < rows.length){
+    const row = rows[i];
+    if(!row || row.length===0){ i++; continue; }
+
+    // Main 5-col sector table
+    if(row[0]===MAIN_HEAD[0] && row[1]===MAIN_HEAD[1]){
+      const dataRows=[]; i++;
+      while(i<rows.length && rows[i] && rows[i].length>=5){ dataRows.push(rows[i]); i++; }
+      out += `<table class="sec-table"><thead><tr>${MAIN_HEAD.map(h=>`<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>` +
+        dataRows.map(r=>`<tr>${r.slice(0,5).map(c=>`<td>${escapeHtml(c)}</td>`).join('')}</tr>`).join('') + `</tbody></table>`;
+      continue;
+    }
+
+    // "Line, As Reported, Auditor's Reconstruction, Note" scheme table (4 col)
+    if(row[0]==='Line' && row[1]==='As Reported'){
+      const head = row.slice(0, row.length);
+      const dataRows=[]; i++;
+      while(i<rows.length && rows[i] && rows[i].length>=2 && rows[i][0]!=='Line'){ dataRows.push(rows[i]); i++; }
+      out += `<table class="sec-table"><thead><tr>${head.map(h=>`<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>` +
+        dataRows.map(r=>`<tr>${head.map((h,ci)=>{
+          const v = r[ci]!==undefined? r[ci] : '';
+          const isNum = typeof v === 'number';
+          return `<td class="${isNum?'num':''}">${isNum ? fmt(v) : escapeHtml(v)}</td>`;
+        }).join('')}</tr>`).join('') + `</tbody></table>`;
+      continue;
+    }
+
+    // "Line, Amount(/Rate), Basis" worked-example table (2-3 col)
+    if(row[0]==='Line' && (String(row[1]).startsWith('Amount'))){
+      const head = row.slice(0, row.length);
+      const dataRows=[]; i++;
+      while(i<rows.length && rows[i] && rows[i].length>=2 && rows[i][0]!=='Line'){ dataRows.push(rows[i]); i++; }
+      out += `<table class="sec-table"><thead><tr>${head.map(h=>`<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>` +
+        dataRows.map(r=>`<tr>${head.map((h,ci)=>{
+          const v = r[ci]!==undefined? r[ci] : '';
+          const isNum = typeof v === 'number';
+          return `<td class="${isNum?'num':''}">${isNum ? (Math.abs(v)<1 ? (v*100).toFixed(1)+'%' : fmt(v)) : escapeHtml(v)}</td>`;
+        }).join('')}</tr>`).join('') + `</tbody></table>`;
+      continue;
+    }
+
+    // Bullet list
+    if(String(row[0]).trim().startsWith('•')){
+      const items=[];
+      while(i<rows.length && rows[i] && rows[i].length && String(rows[i][0]).trim().startsWith('•')){
+        items.push(String(rows[i][0]).trim().replace(/^•\s*/,''));
+        i++;
+      }
+      out += `<ul class="sec-bullets">${items.map(t=>`<li>${escapeHtml(t)}</li>`).join('')}</ul>`;
+      continue;
+    }
+
+    // 2-col spec/reference rows (e.g. benefit-in-kind schedule) — group consecutive 2-col rows
+    if(row.length===2){
+      const items=[]; 
+      while(i<rows.length && rows[i] && rows[i].length===2){ items.push(rows[i]); i++; }
+      out += `<div class="sec-spec">` + items.map(r=>`<div class="k">${escapeHtml(r[0])}</div><div class="v">${escapeHtml(r[1])}</div>`).join('') + `</div>`;
+      continue;
+    }
+
+    // single-cell: heading or paragraph
+    if(row.length===1){
+      const text = String(row[0]);
+      if(looksLikeHeading(text)){ out += `<div class="sec-heading">${escapeHtml(text)}</div>`; }
+      else { out += `<p class="sec-para">${escapeHtml(text)}</p>`; }
+      i++;
+      continue;
+    }
+
+    // fallback: render as a plain row
+    out += `<p class="sec-para">${row.map(escapeHtml).join(' — ')}</p>`;
+    i++;
+  }
+  return out;
+}
+
+function loadSectorView(name){
+  const rows = SECTOR_DATA[name];
+  if(!rows){ document.getElementById('sectorContent').innerHTML = '<p class="sec-para">No data for this sector.</p>'; return; }
+  document.getElementById('sectorContent').innerHTML = renderSectorRows(rows);
+
+  // KPI strip: count of core rule rows, worked examples, schemes
+  const coreRows = rows.filter(r=>r.length>=5 && r[0]!==MAIN_HEAD[0]).length;
+  const schemeCount = rows.filter(r=>r[0] && String(r[0]).match(/^Scheme \d/)).length;
+  const workedCount = rows.filter(r=>r[0] && String(r[0]).toLowerCase().startsWith('worked example')).length;
+  const kpiHtml = `
+    <div class="kpi"><div class="lbl">Coverage</div><div class="val" style="font-size:16px;">${escapeHtml(name)}</div><div class="sub">${name==='Universal'||name==='Cross-Cutting Schemes'?'applies underneath every sector':'sector-specific reference'}</div></div>
+    <div class="kpi"><div class="lbl">Tax/compliance areas</div><div class="val">${coreRows}</div><div class="sub">rows in the core table</div></div>
+    <div class="kpi"><div class="lbl">Worked examples</div><div class="val">${workedCount}</div><div class="sub">numeric illustrations</div></div>
+    <div class="kpi bad"><div class="lbl">Scheme illustrations</div><div class="val">${schemeCount}</div><div class="sub">reported-vs-reconstructed cases</div></div>
+  `;
+  document.getElementById('sectorKpis').innerHTML = kpiHtml;
+}
+
+document.getElementById('sector-select').addEventListener('change', (e)=>loadSectorView(e.target.value));
+
+/* ---------- Tab switching ---------- */
+function showView(view){
+  document.getElementById('view-expense').style.display = view==='expense' ? '' : 'none';
+  document.getElementById('view-sector').style.display = view==='sector' ? '' : 'none';
+  document.getElementById('view-diag').style.display = view==='diag' ? '' : 'none';
+  document.getElementById('tabExpense').classList.toggle('on', view==='expense');
+  document.getElementById('tabSector').classList.toggle('on', view==='sector' || view==='diag');
+}
+document.getElementById('tabExpense').addEventListener('click', ()=>showView('expense'));
+document.getElementById('tabSector').addEventListener('click', ()=>{
+  showView('sector');
+  populateIndustryDropdown();
+  loadSectorView(document.getElementById('sector-select').value || 'Universal');
+});
+document.getElementById('diagBtn').addEventListener('click', ()=>{ showView('diag'); buildDiagForm(); });
+document.getElementById('diagBack').addEventListener('click', ()=>showView('sector'));
+
+/* =========================================================================
+   PRE-AUDIT DIAGNOSTIC — ported from the workbook's Pre-Audit Inputs/Results
+   ========================================================================= */
+const DIAG_FIELDS = [
+  ['grp','A. Company & Period'],
+  ['text','companyName','Company name','Sample Trading Co Ltd'],
+  ['select','sector','Sector','Trading', SECTOR_INDUSTRIES],
+  ['text','period','Period covered','FY2025'],
+  ['grp','B. Profit & Loss (GH¢)'],
+  ['num','revenue','Revenue', 5000000],
+  ['num','cos','Cost of sales', -3200000],
+  ['num','mgtFee','Related-party management/consultancy fees', -350000],
+  ['num','intRelated','Interest expense — related-party loans', -180000],
+  ['num','intThird','Interest expense — third-party loans', -40000],
+  ['num','salaries','Salaries & wages (payroll, excl. consultants)', -600000],
+  ['num','consultFees','Consultant/professional fees outside payroll (WHT basis)', -220000],
+  ['num','bonus','Bonus paid to staff', -95000],
+  ['num','overtime','Overtime paid to staff', -30000],
+  ['num','otherOpex','Other operating expenses', -100000],
+  ['grp','C. Balance Sheet (GH¢)'],
+  ['num','equity','Total equity', 2000000],
+  ['num','rpLoans','Related-party loans payable', 1500000],
+  ['num','tpLoans','Third-party loans payable', 400000],
+  ['num','ppeAdd','PP&E additions during the year', 800000],
+  ['num','capAllow','Capital allowance claimed for the year', 320000],
+  ['grp','D. Tax & Compliance Figures (GH¢)'],
+  ['num','citPaid','CIT paid / provided for the year', 46000],
+  ['num','citRate','Statutory CIT rate applicable', 0.25],
+  ['num','whtRemitted','WHT remitted on services/contracts', 12000],
+  ['num','vatOutput','VAT output for the year', 750000],
+  ['num','vatInput','VAT input claimed for the year', 610000],
+  ['num','payeRemitted','PAYE remitted for the year', 95000],
+  ['grp','E. Headcount'],
+  ['num','headcount','Number of payroll employees', 25],
+  ['num','consultCount','Number of "consultants" outside payroll', 4],
+  ['num','juniorCount','Qualifying junior employees (≤GH¢18,000/yr)', 10],
+  ['grp','F. Loss History'],
+  ['num','lossYears','Consecutive prior years with a tax loss', 2],
+  ['select2','within5','Within first 5 years of operation?','N',['Y','N']],
+  ['grp','G. Benchmarks'],
+  ['num','marginLow','Expected gross margin — low end', 0.30],
+  ['num','marginHigh','Expected gross margin — high end', 0.45],
+  ['num','deSafeHarbour','Debt-to-equity safe-harbour ratio', 3],
+  ['num','rpFeeThresh','Related-party fee flag threshold (% revenue)', 0.05],
+  ['num','consultShareThresh','Consultant cost share flag threshold', 0.30],
+  ['num','vatRatioThresh','VAT input/output ratio flag threshold', 0.85],
+];
+
+function buildDiagForm(){
+  const el = document.getElementById('diagForm');
+  el.innerHTML = DIAG_FIELDS.map(f=>{
+    if(f[0]==='grp') return `<div class="grp">${escapeHtml(f[1])}</div>`;
+    const [type,id,label,dflt,opts] = f;
+    if(type==='text') return `<div class="diag-row"><label for="d-${id}">${escapeHtml(label)}</label><input type="text" id="d-${id}" value="${escapeHtml(dflt)}"></div>`;
+    if(type==='num') return `<div class="diag-row"><label for="d-${id}">${escapeHtml(label)}</label><input type="number" step="any" id="d-${id}" value="${dflt}"></div>`;
+    if(type==='select') return `<div class="diag-row"><label for="d-${id}">${escapeHtml(label)}</label><select id="d-${id}">${opts.map(o=>`<option ${o===dflt?'selected':''}>${escapeHtml(o)}</option>`).join('')}</select></div>`;
+    if(type==='select2') return `<div class="diag-row"><label for="d-${id}">${escapeHtml(label)}</label><select id="d-${id}">${opts.map(o=>`<option ${o===dflt?'selected':''}>${escapeHtml(o)}</option>`).join('')}</select></div>`;
+    return '';
+  }).join('');
+}
+
+function dv(id){
+  const el = document.getElementById('d-'+id);
+  if(!el) return 0;
+  if(el.tagName==='SELECT') return el.value;
+  const n = parseFloat(el.value);
+  return isNaN(n) ? 0 : n;
+}
+
+function runDiagnostic(){
+  const v = {};
+  DIAG_FIELDS.forEach(f=>{ if(f[0]!=='grp') v[f[1]] = dv(f[1]); });
+
+  const grossProfit = v.revenue + v.cos;
+  const totalOpex = v.mgtFee+v.intRelated+v.intThird+v.salaries+v.consultFees+v.bonus+v.overtime+v.otherOpex;
+  const pbt = grossProfit + totalOpex;
+
+  const tests = [];
+  const pct = n => (n*100).toFixed(1)+'%';
+  const na = (cond) => cond;
+
+  // 1. effective tax rate vs statutory
+  {
+    const etr = pbt<=0 ? null : v.citPaid/pbt;
+    const status = pbt<=0 ? 'N/A — no taxable profit reported' : (etr < v.citRate*0.8 ? 'FLAG — effective rate well below statutory' : 'Within expected range');
+    tests.push({name:'1. Effective tax rate vs statutory rate', val: etr===null?'N/A':pct(etr), bench: pct(v.citRate), status,
+      note:'A gap can be legitimate (capital allowances, reliefs, brought-forward losses) but should be explainable.', ref:'Universal — CIT'});
+  }
+  // 2. gross margin vs band
+  {
+    const gm = v.revenue!==0 ? grossProfit/v.revenue : 0;
+    const status = (gm<v.marginLow || gm>v.marginHigh) ? 'FLAG — outside expected margin band' : 'Within expected range';
+    tests.push({name:'2. Gross margin vs expected band', val: pct(gm), bench: pct(v.marginLow)+' – '+pct(v.marginHigh), status,
+      note:'Below the band can indicate suppressed revenue or inflated cost of sales; above can indicate unrecorded expenses.', ref:'Trading/Manufacturing — cost of sales & stock reconciliation'});
+  }
+  // 3. related-party fee % revenue
+  {
+    const ratio = v.revenue!==0 ? Math.abs(v.mgtFee)/v.revenue : 0;
+    const status = ratio>v.rpFeeThresh ? 'FLAG — related-party fee ratio elevated' : 'Within expected range';
+    tests.push({name:'3. Related-party management/consultancy fee as % of revenue', val: pct(ratio), bench: pct(v.rpFeeThresh), status,
+      note:"Elevated ratio alone isn't proof; check for a contract, deliverables, and a benchmarked market rate.", ref:'Cross-Cutting Schemes — Scheme 1'});
+  }
+  // 4. related-party debt-to-equity
+  {
+    const status1 = v.equity<=0;
+    const ratio = status1 ? null : v.rpLoans/v.equity;
+    const status = status1 ? 'N/A — non-positive equity' : (ratio>v.deSafeHarbour ? 'FLAG — thin capitalisation risk' : 'Within expected range');
+    tests.push({name:'4. Related-party debt-to-equity ratio', val: ratio===null?'N/A':ratio.toFixed(2), bench: v.deSafeHarbour.toFixed(2), status,
+      note:'Confirm the current statutory safe-harbour ratio under Act 896 before relying on this threshold.', ref:'Cross-Cutting Schemes — Scheme 4'});
+  }
+  // 5. implied interest rate on related-party loan
+  {
+    const rate = v.rpLoans===0 ? null : Math.abs(v.intRelated)/v.rpLoans;
+    tests.push({name:'5. Implied interest rate on related-party loan', val: rate===null?'N/A':pct(rate), bench:"Compare to BoG rediscount rate / an arm's-length comparable facility", status:'Informational — review, not auto-flagged',
+      note:'A rate materially above or below market benchmarks for comparable debt warrants explanation.', ref:'Cross-Cutting Schemes — Scheme 4'});
+  }
+  // 6. WHT remitted vs implied
+  {
+    const implied = Math.abs(v.consultFees)*0.075;
+    const status = v.whtRemitted < implied*0.9 ? 'FLAG — WHT remitted appears below the amount implied by the consultant fee expense' : 'Within expected range';
+    tests.push({name:'6. WHT remitted vs amount implied by consultant fees', val: fmt(v.whtRemitted), bench: fmt(implied), status,
+      note:'A simple proxy only — does not account for the GH¢2,000 de minimis exemption or non-resident rates.', ref:'Universal — WHT on services; Services-Consulting sheet'});
+  }
+  // 7. PAYE remitted vs payroll cost
+  {
+    const ratio = v.salaries!==0 ? v.payeRemitted/Math.abs(v.salaries) : 0;
+    const status = ratio<0.05 ? 'FLAG — PAYE remitted looks low relative to payroll cost' : 'Within expected range';
+    tests.push({name:'7. PAYE remitted vs payroll cost', val: pct(ratio), bench:'Typically well above 5–8% on Ghana\'s progressive PAYE bands', status,
+      note:'A low ratio can indicate benefits-in-kind not grossed into the PAYE base, or pay structured mostly as non-taxable allowances.', ref:'Universal — benefits-in-kind not grossed up'});
+  }
+  // 8. consultant cost as % of total labour
+  {
+    const denom = Math.abs(v.salaries)+Math.abs(v.consultFees);
+    const ratio = denom!==0 ? Math.abs(v.consultFees)/denom : 0;
+    const status = ratio>v.consultShareThresh ? 'FLAG — high reliance on non-payroll consultants; review employment substance' : 'Within expected range';
+    tests.push({name:'8. Consultant cost as % of total labour cost', val: pct(ratio), bench: pct(v.consultShareThresh), status,
+      note:"A high share doesn't itself prove misclassification, but it's the first thing to substance-test.", ref:'Universal — employee vs independent consultant'});
+  }
+  // 9. bonus vs 15% cap
+  {
+    const ratio = v.salaries!==0 ? Math.abs(v.bonus)/Math.abs(v.salaries) : 0;
+    const status = ratio>0.15 ? 'FLAG — bonus exceeds the 15% concessionary cap; excess must be taxed at the full marginal rate, not 5%' : 'Within the 15% concessionary threshold';
+    tests.push({name:'9. Bonus as % of basic salary (15% concessionary cap)', val: pct(ratio), bench:'15%', status,
+      note:'Check the cap is tested against annual basic salary, not against the bonus amount itself. This diagnostic uses total salaries & wages as a proxy for basic salary.', ref:'Universal — bonus cap'});
+  }
+  // 10. overtime concession scope
+  {
+    const status = (v.overtime<0 && v.juniorCount===0) ? 'FLAG — overtime paid but no qualifying junior employees recorded' : 'Consistent';
+    tests.push({name:'10. Overtime concession scope check', val: v.juniorCount, bench:'Overtime should only relate to qualifying junior employees (≤GH¢18,000/yr)', status,
+      note:'Confirm the GH¢18,000 threshold is tested per employee, not assumed for the whole department.', ref:'Universal — overtime concession'});
+  }
+  // 11. minimum chargeable income test
+  {
+    const applies = (v.lossYears>=5 && v.within5==='N' && pbt<=0);
+    const val = applies ? fmt(v.revenue*0.05) : 'N/A';
+    const status = applies ? 'FLAG — minimum tax on 5% of turnover may apply' : 'Not applicable this period';
+    tests.push({name:'11. Minimum chargeable income test (5% of turnover)', val, bench:'Applies after 5 consecutive loss years, outside the first 5 years of operation', status,
+      note:'Farming businesses and businesses within their first 5 years are excluded.', ref:'Trading — minimum chargeable income (applies economy-wide)'});
+  }
+  // 12. capital allowance vs PPE additions
+  {
+    const ratio = v.ppeAdd!==0 ? v.capAllow/v.ppeAdd : null;
+    const status = ratio===null ? 'N/A' : (ratio>0.45 ? 'FLAG — allowance claimed is high relative to additions; verify asset class and cost basis' : 'Within a plausible range');
+    tests.push({name:'12. Capital allowance claimed vs PPE additions', val: ratio===null?'N/A':pct(ratio), bench:'Depends on asset class — Class 1 (40%), Class 2 (30%), etc.', status,
+      note:'Confirm against the correct Fourth Schedule class rather than a flat rule of thumb.', ref:'Manufacturing/Mining — capital allowances'});
+  }
+  // 13. VAT input/output ratio
+  {
+    const ratio = v.vatOutput!==0 ? v.vatInput/v.vatOutput : null;
+    const status = ratio===null ? 'N/A' : (ratio>v.vatRatioThresh ? 'FLAG — input VAT high relative to output; review for a capital-heavy year vs anomalous claims' : 'Within expected range');
+    tests.push({name:'13. VAT input-to-output ratio', val: ratio===null?'N/A':pct(ratio), bench: pct(v.vatRatioThresh), status,
+      note:"A high ratio can be entirely legitimate in a capital expenditure year — check what's driving it before concluding.", ref:'General VAT control'});
+  }
+
+  const flagCount = tests.filter(t=>String(t.status).startsWith('FLAG')).length;
+  document.getElementById('diagSummary').textContent = `${flagCount} of 13 tests flagged for ${document.getElementById('d-companyName')?.value||'this company'} — ${document.getElementById('d-period')?.value||''}`;
+  document.getElementById('diagResults').innerHTML = tests.map(t=>{
+    const cls = String(t.status).startsWith('FLAG') ? 'b-disallowed' : (String(t.status).startsWith('Informational') ? 'b-cond' : (String(t.status)==='N/A'||String(t.status).startsWith('N/A')||String(t.status).startsWith('Not applicable') ? 'b-partial' : 'b-full'));
+    return `<div class="dtest">
+      <div class="head"><span class="name">${escapeHtml(t.name)}</span><span class="val">${escapeHtml(String(t.val))}</span></div>
+      <div style="margin-top:4px;"><span class="badge ${cls}">${escapeHtml(t.status)}</span> <span style="font-size:11px;color:#8b8f9e;">benchmark: ${escapeHtml(String(t.bench))}</span></div>
+      <div class="note">${escapeHtml(t.note)}</div>
+      <div class="ref">${escapeHtml(t.ref)}</div>
+    </div>`;
+  }).join('');
+}
+document.getElementById('diagRun').addEventListener('click', runDiagnostic);
+
+
+loadState();
+</script>
+</body>
+</html>
